@@ -73,6 +73,12 @@ export class InputController {
     return target;
   }
 
+  /** テスト用: マウス移動と同じ経路で視点を動かす(Pointer Lock が無くても効く) */
+  addLook(dx: number, dy = 0): void {
+    this.lookX += dx;
+    this.lookY += dy;
+  }
+
   /** 前回呼び出しからのマウス移動量(px)と、矢印キーによる回転量(rad/s の符号) */
   consumeLook(): { dx: number; dy: number; turn: number } {
     const dx = this.lookX;

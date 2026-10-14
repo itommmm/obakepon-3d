@@ -52,6 +52,8 @@ interface ThreeGameTestHooks {
   hideDebugUi(hidden: boolean): void | Promise<void>;
   /** ゲーム固有: ガブガブーノの行動を止める(テストの段取り用) */
   pauseMonster?(paused: boolean): void;
+  /** ゲーム固有: マウス移動と同じ経路で視点を動かす(テスト用) */
+  look?(dx: number): void;
 }
 
 interface Window {

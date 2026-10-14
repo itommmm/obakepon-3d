@@ -114,29 +114,32 @@ const mem = {
   rng: 987654321,
   interval: 0.3,
   lastElapsed: null,
+  lookFrame: -1,
+  sprintOK: true,
 };
 const rand = () => {
   mem.rng = (mem.rng * 1664525 + 1013904223) % 4294967296;
   return mem.rng / 4294967296;
 };
 
-// 旋回は 2.4 rad/秒。判断の間隔(ゲーム内の秒数)の間は旋回キーが押されたままになるので、
-// 間隔の半分の角度より小さなずれでは回さない(回しすぎて往復するのを防ぐ)。
-const TURN_RATE = 2.4;
-function steerKeys(s, wp, sprint, interval) {
+// 視点はマウス移動と同じ入力経路で動かす(テスト用フック look)。旋回キーでは判断の揺れで行き過ぎたため。
+// マウスの感度は既定値(0.0022)。1回の判断で、ずれの分だけ一度に向きを合わせる。
+const MOUSE_SENS = 0.0022;
+function steer(s, wp, sprint, mem) {
   const dx = wp.x - s.x;
   const dz = wp.z - s.z;
   let diff = Math.atan2(-dx, -dz) - s.yaw;
   while (diff > Math.PI) diff -= Math.PI * 2;
   while (diff < -Math.PI) diff += Math.PI * 2;
-  const deadband = Math.min(0.8, Math.max(0.15, 0.5 * TURN_RATE * interval));
-  const keys = [];
-  if (diff > deadband) keys.push('ArrowLeft');
-  else if (diff < -deadband) keys.push('ArrowRight');
-  if (Math.abs(diff) < 0.6) keys.push('KeyW');
-  // 走るのは前に進んでいるときだけ(W と一緒)。ずれが小さければ、判断の間に向きが戻っても走り続ける
-  if (sprint && Math.abs(diff) < 0.9) keys.push('ShiftLeft');
-  return keys;
+  let look = null;
+  // 直前の視点変更がまだ反映されていない間は、重ねて回さない(行き過ぎ防止)
+  if (Math.abs(diff) > 0.03 && s.frame > mem.lookFrame) {
+    look = -diff / MOUSE_SENS;
+    mem.lookFrame = s.frame;
+  }
+  const keys = ['KeyW'];
+  if (sprint && mem.sprintOK) keys.push('ShiftLeft');
+  return { keys, look };
 }
 
 // 経路(ウェイポイントの列)に沿って進む。5秒(ゲーム内)近づけなければ詰まりとして、後ろに下がって仕切り直す。
@@ -174,7 +177,8 @@ function navigate(s, light, key, makeWaypoints, opts) {
     mem.nudgeKeys = ['KeyS', rand() < 0.5 ? 'ArrowLeft' : 'ArrowRight'];
     return { keys: mem.nudgeKeys, light, label: 'stuck-nudge' };
   }
-  return { keys: steerKeys(s, wp, opts.sprint, mem.interval), light, label: opts.label };
+  const st = steer(s, wp, opts.sprint, mem);
+  return { keys: st.keys, look: st.look, light, label: opts.label };
 }
 
 function chooseGoal(s) {
@@ -197,6 +201,9 @@ function chooseGoal(s) {
 function decide(s) {
   const light = POLICY === 'reckless';
   const now = s.elapsed;
+  // スタミナを使い切らない(使い切ると、歩く速さが敵より遅くなる)。35で走り始め、10で止める
+  if (s.stamina >= 35) mem.sprintOK = true;
+  if (s.stamina <= 10) mem.sprintOK = false;
   if (mem.lastElapsed !== null) {
     const gap = now - mem.lastElapsed;
     if (gap > 0 && gap < 3) mem.interval = 0.8 * mem.interval + 0.2 * gap;
@@ -405,6 +412,9 @@ try {
       if (action.press) {
         await tap(action.press);
         mem.lastE = Date.now();
+      }
+      if (action.look !== undefined && action.look !== null) {
+        await page.evaluate((v) => window.__THREE_GAME_TEST_HOOKS__.look(v), action.look);
       }
       await setKeys(action.keys ?? []);
       if (args.debug && decisionLog.length < 400) {

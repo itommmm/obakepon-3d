@@ -715,6 +715,9 @@ export class Game {
         this.render();
         this.publishDiagnostics();
       },
+      look: (dx: number) => {
+        this.input.addLook(dx);
+      },
       pauseMonster: (paused: boolean) => {
         this.monsterPaused = paused;
       },
