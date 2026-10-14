@@ -89,6 +89,7 @@ async function sample(page: Page): Promise<Snapshot> {
 class Bot {
   distance = 0;
   softlockWindows = 0;
+  caughtOnRoute = 0;
   private held = new Set<string>();
   private last: Snapshot | null = null;
 
@@ -170,6 +171,24 @@ class Bot {
     return snap;
   }
 
+  /** 目的のマスまで行く。途中で捕まったら再開を待ち、今いる場所から経路を引き直す。 */
+  async goTo(target: Cell, attempts = 6): Promise<Snapshot> {
+    for (let i = 0; i < attempts; i += 1) {
+      await expect.poll(async () => (await sample(this.page)).state, { timeout: 30_000 * SLOW }).toBe('playing');
+      const now = await this.tick();
+      const from = { col: Math.floor(now.x / CELL), row: Math.floor(now.z / CELL) };
+      const snap = await this.followPath(from, target, { stop: (s) => s.state !== 'playing' });
+      await this.release();
+      if (snap.state === 'playing') {
+        const goal = center(target);
+        if (Math.hypot(snap.x - goal.x, snap.z - goal.z) < 1.2) return snap;
+      } else {
+        this.caughtOnRoute += 1;
+      }
+    }
+    throw new Error(`bot could not reach cell ${target.col},${target.row}`);
+  }
+
   async press(key: string): Promise<void> {
     await this.page.keyboard.press(key);
     await this.page.waitForTimeout(150);
@@ -201,7 +220,7 @@ test('bot playtest: ヒューズを拾ってはめ、捕まって再開できる
   const started = Date.now();
 
   // 1. 入口ロビーのヒューズへ
-  await bot.followPath({ col: 1, row: 1 }, { col: 2, row: 8 });
+  await bot.goTo({ col: 2, row: 8 });
   await expect(page.locator('#prompt')).toBeVisible();
   await bot.press('KeyE');
   const afterPickup = await bot.tick();
@@ -210,8 +229,8 @@ test('bot playtest: ヒューズを拾ってはめ、捕まって再開できる
   const timeToFirstFuse = (Date.now() - started) / 1000;
 
   // 2. 中央ホールの配電盤へ(配電盤の東側)
-  const caughtBefore = afterPickup.caughtCount;
-  await bot.followPath({ col: 2, row: 8 }, { col: 10, row: 12 });
+  await bot.goTo({ col: 10, row: 12 });
+  const caughtBefore = (await bot.tick()).caughtCount;
   await bot.driveTo({ x: 9 * CELL + 1.5 + 1.6, z: 12 * CELL + 1.5 }, { tolerance: 0.5 });
   await expect(page.locator('#prompt-text')).toContainText('ヒューズをはめる');
   await bot.press('KeyE');
@@ -252,6 +271,7 @@ test('bot playtest: ヒューズを拾ってはめ、捕まって再開できる
     timeToInsert,
     timeToCaught,
     caughtBeforeReckless: caughtBefore,
+    caughtOnRoute: bot.caughtOnRoute,
     distanceTravelled: Number(bot.distance.toFixed(1)),
     softlockWindows: bot.softlockWindows,
     errors,

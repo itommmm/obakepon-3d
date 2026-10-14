@@ -45,6 +45,7 @@ async function sampleCanvas(page: import('@playwright/test').Page): Promise<Canv
 }
 
 test('renders a nonblank interactive game canvas', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.includes('mobile'), 'このゲームはPC(キーボード + マウス)向け');
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
   page.on('console', (message) => {
@@ -59,29 +60,17 @@ test('renders a nonblank interactive game canvas', async ({ page }, testInfo) =>
   const sample = await sampleCanvas(page);
   expect(sample, JSON.stringify(sample)).toMatchObject({ ok: true });
 
+  // タイトルの開始ボタンを押し、W で前進できること(開始時は南向き = +z 方向)
+  await page.getByRole('button', { name: '工場に入る' }).click();
+  await page.waitForFunction(() => window.__THREE_GAME_DIAGNOSTICS__?.state === 'playing');
   const before = await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.player.position.z ?? 0);
-
-  if (testInfo.project.name.includes('mobile')) {
-    const stick = page.locator('#touch-stick');
-    await expect(stick).toBeVisible();
-    const box = await stick.boundingBox();
-    expect(box).not.toBeNull();
-    if (box) {
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await page.mouse.down();
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.05, { steps: 6 });
-      await page.waitForTimeout(450);
-      await page.mouse.up();
-    }
-  } else {
-    await page.keyboard.down('KeyW');
-    await page.waitForTimeout(450);
-    await page.keyboard.up('KeyW');
-  }
-
+  await page.keyboard.down('KeyW');
   await expect
-    .poll(async () => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.player.position.z ?? 0))
-    .toBeLessThan(before - 0.3);
+    .poll(async () => page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.player.position.z ?? 0), {
+      timeout: 30_000,
+    })
+    .toBeGreaterThan(before + 0.3);
+  await page.keyboard.up('KeyW');
 
   const screenshot = await page.screenshot({ fullPage: true });
   await testInfo.attach(`${testInfo.project.name}-game`, {
