@@ -359,6 +359,26 @@ export class AudioSystem {
     this.noiseBurst(panner, now, 0.06, 3200, 0.5 * level, 'bandpass');
   }
 
+  /** ペンギーノが向きを変えたときの「キュッ」(紙パックが擦れる音 + 小さな鳴き声) */
+  squeak(position: THREE.Vector3): void {
+    const ctx = this.context;
+    if (!this.ready || !ctx) return;
+    const panner = this.panner(position, 3, 30);
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(1300, now);
+    osc.frequency.exponentialRampToValueAtTime(700, now + 0.16);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.12, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+    osc.connect(gain).connect(panner);
+    osc.start(now);
+    osc.stop(now + 0.22);
+    this.noiseBurst(panner, now, 0.12, 2400, 0.25, 'bandpass');
+  }
+
   private distantChomps(position: THREE.Vector3): void {
     const ctx = this.context;
     if (!ctx) return;

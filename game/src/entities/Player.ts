@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { InputController } from '../core/InputController';
+import { FlashlightBeam } from '../render/FlashlightBeam';
 import type { Level } from '../world/Level';
 
 export type PlayerTuning = {
@@ -26,6 +27,8 @@ export class Player {
   readonly position = new THREE.Vector3();
   readonly velocity = new THREE.Vector3();
   readonly flashlight: THREE.SpotLight;
+  /** 光の筋とチリ(見た目だけ) */
+  readonly beam: FlashlightBeam;
   yaw = 0;
   pitch = 0;
   stamina = 100;
@@ -55,6 +58,13 @@ export class Player {
     this.flashlight.target.position.set(0.05, -0.35, -10);
     camera.add(this.flashlight);
     camera.add(this.flashlight.target);
+    this.beam = new FlashlightBeam(this.flashlight.angle);
+    this.beam.cone.position.copy(this.flashlight.position);
+    this.beam.cone.quaternion.setFromUnitVectors(
+      new THREE.Vector3(0, 0, -1),
+      this.flashlight.target.position.clone().sub(this.flashlight.position).normalize(),
+    );
+    camera.add(this.beam.cone);
   }
 
   get eyePosition(): THREE.Vector3 {

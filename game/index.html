@@ -11,10 +11,7 @@
     <main id="app" data-state="title">
       <canvas id="game-canvas" aria-label="おばけポン ゲーム画面" tabindex="0"></canvas>
 
-      <!-- 画面効果: ビネット、フィルムグレイン、危険の赤、フラッシュ -->
-      <div id="fx-vignette" aria-hidden="true"></div>
-      <div id="fx-danger" aria-hidden="true"></div>
-      <div id="fx-grain" aria-hidden="true"></div>
+      <!-- 周辺減光・グレイン・危険の赤はポストエフェクト(src/render/PostFX.ts)。ここは白/赤のフラッシュだけ -->
       <div id="fx-flash" aria-hidden="true"></div>
 
       <section id="hud" aria-live="polite">

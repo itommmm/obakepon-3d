@@ -2,8 +2,10 @@ import * as THREE from 'three';
 import { InputController } from '../core/InputController';
 import { Loop } from '../core/Loop';
 import { createRenderer, resizeRenderer } from '../core/Renderer';
+import { PostFX } from '../render/PostFX';
 import { Fuse } from '../entities/Fuse';
 import { Monster } from '../entities/Monster';
+import { Penguino } from '../entities/Penguino';
 import { Player } from '../entities/Player';
 import { AudioSystem } from '../systems/AudioSystem';
 import { DebugTools, type DebugTuning } from '../systems/DebugTools';
@@ -22,12 +24,14 @@ const TARGET_FUSES = 3;
 
 export class Game {
   private readonly renderer: THREE.WebGLRenderer;
+  private readonly postfx: PostFX;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(72, 1, 0.05, 90);
   private readonly input: InputController;
   private readonly level: Level;
   private readonly player: Player;
   private readonly monster: Monster;
+  private readonly penguino: Penguino;
   private readonly fuses: Fuse[] = [];
   private readonly audio = new AudioSystem();
   private readonly hud: Hud;
@@ -54,6 +58,7 @@ export class Game {
   private rng = createSeededRandom(1);
   private state: AppState = 'title';
   private frame = 0;
+  private renderClock = 0;
   private elapsed = 0;
   private carried = 0;
   private inserted = 0;
@@ -108,6 +113,10 @@ export class Game {
       onFootstep: (position, loudness) => this.audio.monsterFootstep(position, loudness),
       onChomp: (position) => this.audio.chomp(position),
     });
+    // 図書室の奥(右上の角)に立つペンギーノ。最初は本棚の方を向いている。
+    this.penguino = new Penguino(this.level, this.level.center({ col: 14, row: 1 }, new THREE.Vector3()), -Math.PI / 2, (position) =>
+      this.audio.squeak(position),
+    );
     this.hud = new Hud({
       onStart: () => this.startGame(),
       onResume: () => this.resumeGame(),
@@ -123,13 +132,14 @@ export class Game {
     });
     this.debugTools = new DebugTools(this.tuning, () => {
       this.renderer.toneMappingExposure = this.tuning.exposure;
-      resizeRenderer(this.renderer, this.camera, this.tuning.maxDpr);
+      this.resize();
     });
 
     this.createScene();
+    this.postfx = new PostFX(this.renderer, this.scene, this.camera);
     this.resetRun();
     this.setState('title');
-    resizeRenderer(this.renderer, this.camera, this.tuning.maxDpr);
+    this.resize();
     document.addEventListener('pointerlockchange', this.onPointerLockChange);
     document.addEventListener('visibilitychange', this.onVisibility);
     canvas.addEventListener('click', () => {
@@ -152,6 +162,9 @@ export class Game {
     this.debugTools.dispose();
     for (const fuse of this.fuses) fuse.dispose();
     this.monster.dispose();
+    this.penguino.dispose();
+    this.player.beam.dispose();
+    this.postfx.dispose();
     this.level.dispose();
     this.renderer.dispose();
     window.__THREE_GAME_DIAGNOSTICS__ = undefined;
@@ -203,6 +216,8 @@ export class Game {
     this.player.battery = 100;
     this.player.reset(this.checkpoint.position, this.checkpoint.yaw);
     this.monster.reset(this.level.monsterSpawn);
+    this.penguino.reset(-Math.PI / 2);
+    this.danger = 0;
     this.hud.clearToast();
   }
 
@@ -212,7 +227,8 @@ export class Game {
 
   private update(delta: number, elapsed: number): void {
     this.frame += 1;
-    resizeRenderer(this.renderer, this.camera, this.tuning.maxDpr);
+    if (!this.reducedMotion) this.renderClock = elapsed;
+    this.resize();
     if (this.pausedForScreenshot) {
       this.publishDiagnostics();
       return;
@@ -281,6 +297,7 @@ export class Game {
       enraged: this.enraged,
     });
 
+    this.penguino.update(delta, this.camera);
     this.updateInteractions();
     if (this.state !== 'playing') return;
 
@@ -406,6 +423,7 @@ export class Game {
     this.player.lookAt(this.monster.headPosition(this.scratchB).setY(this.camera.position.y));
     this.monster.poseScare(this.camera, lunge);
     this.player.flashlight.intensity = 4;
+    this.danger = Math.max(0, 1 - t / 1.5);
     const shake = Math.max(0, 1 - t / 1.2) * 0.06;
     this.camera.position.x += Math.sin(elapsed * 90) * shake;
     this.camera.position.y += Math.cos(elapsed * 77) * shake;
@@ -445,8 +463,16 @@ export class Game {
     this.hud.showResults(this.elapsed, this.caughtCount);
   }
 
+  private resize(): void {
+    // postfx は構築前に呼ばれることがある(コンストラクタ内)
+    if (resizeRenderer(this.renderer, this.camera, this.tuning.maxDpr)) this.postfx?.setSize(this.renderer);
+  }
+
   private render(): void {
-    this.renderer.render(this.scene, this.camera);
+    const intensity = this.player.lightOn ? this.player.flashlight.intensity / this.tuning.flashlightIntensity : 0;
+    this.player.beam.update(this.camera, this.player.flashlight, Math.min(1, intensity), this.renderClock);
+    this.postfx.update(this.renderClock, this.state === 'playing' || this.state === 'caught' ? this.danger : 0);
+    this.postfx.render();
   }
 
   private createScene(): void {
@@ -455,7 +481,9 @@ export class Game {
     this.scene.add(this.hemisphere);
     this.scene.add(this.level.group);
     this.scene.add(this.camera);
+    this.scene.add(this.player.beam.dust);
     this.scene.add(this.monster.group);
+    this.scene.add(this.penguino.group);
     this.level.fuseCells.forEach((cell, index) => {
       const fuse = new Fuse(index, this.level.center(cell, new THREE.Vector3(), 0.55));
       this.fuses.push(fuse);
@@ -481,7 +509,7 @@ export class Game {
         this.monster.setRng(this.rng);
       },
       setState: (name: string) => {
-        const known = ['title', 'active-play', 'chase', 'jumpscare', 'caught', 'finale', 'complete'];
+        const known = ['title', 'active-play', 'chase', 'showcase', 'penguino', 'jumpscare', 'caught', 'finale', 'complete'];
         if (!known.includes(name)) throw new Error(`Unknown test state: ${name}`);
         this.resetRun();
         if (name === 'title') {
@@ -507,6 +535,21 @@ export class Game {
             enraged: false,
           });
           this.danger = 0.8;
+        } else if (name === 'showcase') {
+          // 電気の点いた多目的ホールで、ガブガブーノを斜め前から見る(モデル確認用)
+          this.powered = true;
+          this.level.setPower(true);
+          this.applyLighting();
+          this.setState('playing');
+          this.placePlayer({ col: 14, row: 12 }, { col: 15, row: 10 }, 2.4);
+          this.monster.reset({ col: 15, row: 10 }, 60);
+          this.monster.position.x -= 0.3;
+          this.monster.snapFacing(this.scratch.set(this.player.position.x - 1.2, 0, this.player.position.z));
+        } else if (name === 'penguino') {
+          // 図書室: 懐中電灯の先に、こちらを向いたペンギーノ
+          this.setState('playing');
+          this.placePlayer({ col: 11, row: 1 }, { col: 14, row: 1 }, 1.4);
+          this.penguino.face(this.player.position);
         } else if (name === 'jumpscare') {
           // 捕まった直後(暗転前)の顔
           this.placePlayer({ col: 13, row: 11 }, { col: 16, row: 11 });

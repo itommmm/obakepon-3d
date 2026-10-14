@@ -6,16 +6,19 @@ Poppy Playtime のような一人称ホラーに、「持ち物 + 動物」を�
 
 ![追いかけてくるガブガブーノ](docs/screenshots/chase.png)
 
-| タイトル | 多目的ホール | 電源復旧後の廊下 | ジャンプスケア |
+| ガブガブーノ(SDF スカルプト) | ペンギーノ | 多目的ホール | ジャンプスケア |
 |---|---|---|---|
-| ![](docs/screenshots/title.png) | ![](docs/screenshots/active-play.png) | ![](docs/screenshots/finale.png) | ![](docs/screenshots/jumpscare.png) |
+| ![](docs/screenshots/showcase.png) | ![](docs/screenshots/penguino.png) | ![](docs/screenshots/active-play.png) | ![](docs/screenshots/jumpscare.png) |
+
+作り方の背景(2026年のバイブコーディング事例の調査)は [artifacts/vibe-research.md](artifacts/vibe-research.md) にまとめています。
 
 ## キャラクター
 
 | 名前 | 説明 |
 |---|---|
 | **ランドセルザメ・ガブガブーノ** | 身長約4mの赤いランドセル。かぶせ(フタ)がサメのアゴで、開くとギザギザの歯が並ぶ。背びれ、胸びれ、尾びれがあり、白い靴下と上履きを履いた細長い足で歩く。名札は「6ねん2くみ」。追ってくるときは「ガブガブ」とアゴを鳴らす |
-| チョーク・ワニーニ / ぎゅうにゅうパック・ペンギーノ / うわばき・ドラゴンチーノ | 昇降口の掲示板「6ねん2くみの なかまたち」に描かれた仲間たち |
+| **ぎゅうにゅうパック・ペンギーノ** | 牛乳パックの体のペンギン(身長約2m)。図書室で、見ていないときだけ首を回す |
+| チョーク・ワニーニ / うわばき・ドラゴンチーノ | 昇降口の掲示板「6ねん2くみの なかまたち」に描かれた仲間たち |
 
 ## 遊び方
 
@@ -47,7 +50,12 @@ npm run dev
 - **非常灯の下(安全地帯)**: ガブガブーノに見つからず、電池とスタミナが回復する。
 - **ジャンプスケアと再開**: 捕まるとアゴが開いて迫ってくる演出のあと、チェックポイント(入口、または分電盤の前)から再開する。
 - **音**: Web Audio だけで手続き的に生成する。開始時と遠くで歪んで鳴る学校のチャイム、方向がわかる足音と噛みつき音(HRTF)、近づくと速くなる心拍、低いドローン音、叫び声など。
-- **ビジュアル**: アセットはすべて手続き的に生成する(校舎の壁と木の床、掲示物、黒板、下駄箱とランドセル、長机と給食、ガブガブーノ本体)。外部の画像や3Dモデルは使わない。
+- **ビジュアル(すべてバイブ生成。外部の画像や3Dモデルは0)**
+  - **SDF スカルプト**: ガブガブーノとペンギーノは、距離関数をなめらかに合成して彫り、Surface Nets でメッシュ化している(`src/render/sdf.ts`)。
+  - **ポストエフェクト**: ブルーム(目や非常灯)、危険度で強まる色収差と赤い脈動、周辺減光、フィルムグレイン(`src/render/PostFX.ts`)。
+  - **懐中電灯の光の筋と、光の中に浮かぶチリ**: シェーダのみで描く(`src/render/FlashlightBeam.ts`)。
+  - **校舎**: 壁、木の床、掲示物、黒板、下駄箱とランドセル、長机と給食。Canvas とジオメトリの合成で作る。
+- **ぎゅうにゅうパック・ペンギーノ**: 図書室の奥に立っている。プレイヤーが目をそらしている間だけ、こちらへ向き直る。
 
 ## 技術仕様
 
@@ -59,19 +67,22 @@ npm run dev
 | 敵AI | `game/src/entities/Monster.ts`(状態機械 + A* + 視線判定)。見た目は `GabugabunoModel.ts` |
 | ライティング | 懐中電灯のスポットライト(影あり)、非常灯、電源復旧で点く天井灯、指数フォグ |
 | 乱数 | シード付きRNG(`utils/random.ts`)。テストを再現可能にするため、ゲームプレイの乱数はすべてここを通す |
-| テスト用フック | `window.__THREE_GAME_TEST_HOOKS__`(状態: `title` / `active-play` / `chase` / `jumpscare` / `caught` / `finale` / `complete`)と `window.__THREE_GAME_DIAGNOSTICS__` |
+| 3Dモデル | SDF スカルプト + Surface Nets(`src/render/sdf.ts`)。起動時に生成する |
+| 描画 | WebGL + EffectComposer(RenderPass → UnrealBloom → Output → ホラー仕上げシェーダ) |
+| テスト用フック | `window.__THREE_GAME_TEST_HOOKS__`(状態: `title` / `active-play` / `chase` / `showcase` / `penguino` / `jumpscare` / `caught` / `finale` / `complete`)と `window.__THREE_GAME_DIAGNOSTICS__` |
 
 ### ディレクトリ
 
 ```
 game/
   src/core/      ループ、レンダラー、入力
+  src/render/    SDF スカルプト、ポストエフェクト、懐中電灯の光の筋
   src/world/     マップ定義、レベル生成、手続きテクスチャ
-  src/entities/  プレイヤー、ガブガブーノ(AI とモデル)、ヒューズ
+  src/entities/  プレイヤー、ガブガブーノ(AI とモデル)、ペンギーノ、ヒューズ
   src/systems/   音、HUD、デバッグ用パネル
   src/game/      ゲーム進行(Game.ts)
   tests/         Playwright(画面確認、ボットによるプレイテスト)
-artifacts/       企画書と進行メモ
+artifacts/       企画書、進行メモ、バイブコーディングの調査メモ(vibe-research.md)
 .claude/skills/  ゲーム制作用の Claude Code スキル(threejs-game-skills)
 ```
 
