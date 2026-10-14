@@ -594,7 +594,7 @@ export class Game {
         this.monster.setRng(this.rng);
       },
       setState: (name: string) => {
-        const known = ['title', 'active-play', 'chase', 'showcase', 'penguino', 'wanini', 'dragontino', 'jumpscare', 'caught', 'finale', 'complete'];
+        const known = ['title', 'active-play', 'chase', 'showcase', 'penguino', 'wanini', 'dragontino', 'fuse3', 'jumpscare', 'caught', 'finale', 'complete'];
         if (!known.includes(name)) throw new Error(`Unknown test state: ${name}`);
         this.resetRun();
         if (name === 'title') {
@@ -620,6 +620,18 @@ export class Game {
             enraged: false,
           });
           this.danger = 0.8;
+        } else if (name === 'fuse3') {
+          // 最後の1本を持ち、ヒューズは2本はめ済み。分電盤の前から、電源を入れて脱出するまで(プレイテスト用)
+          this.resetRun();
+          this.setState('playing');
+          for (const fuse of this.fuses) fuse.collect();
+          this.carried = 1;
+          this.inserted = 2;
+          this.level.setFuseLamps(2);
+          this.checkpoint.position.copy(this.level.breakerFront);
+          this.checkpoint.yaw = -Math.PI / 2;
+          this.placePlayer({ col: 10, row: 12 }, { col: 9, row: 12 }, 1.4);
+          this.hud.toast('最後のヒューズを持っている。分電盤へ', { seconds: 3 });
         } else if (name === 'showcase') {
           // 電気の点いた多目的ホールで、ガブガブーノを斜め前から見る(モデル確認用)
           this.powered = true;

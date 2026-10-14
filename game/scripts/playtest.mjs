@@ -31,6 +31,8 @@ const POLICY = args.policy ?? 'careful';
 if (!['careful', 'reckless'].includes(POLICY)) throw new Error(`unknown policy: ${POLICY}`);
 const URL_BASE = args.url ?? 'http://127.0.0.1:5188';
 const SPEED = Math.min(8, Math.max(1, Number(args.speed ?? 1)));
+const START = args.start ?? 'title';
+if (!['title', 'fuse3'].includes(START)) throw new Error(`unknown start: ${START}`);
 const SEED = Number(args.seed ?? 42);
 const MAX_MS = Number(args['max-min'] ?? 40) * 60_000;
 const OUT = path.resolve(gameDir, args.out ?? `artifacts/playtest/${POLICY}-${SEED}.json`);
@@ -94,6 +96,7 @@ function bfs(start, isGoal, avoid = null) {
 
 // ---------- 判断 ----------
 
+const stuckLog = [];
 const mem = {
   fuseDone: new Set(),
   planKey: null,
@@ -131,7 +134,8 @@ function steerKeys(s, wp, sprint, interval) {
   if (diff > deadband) keys.push('ArrowLeft');
   else if (diff < -deadband) keys.push('ArrowRight');
   if (Math.abs(diff) < 0.6) keys.push('KeyW');
-  if (sprint && Math.abs(diff) < 0.3) keys.push('ShiftLeft');
+  // 走るのは前に進んでいるときだけ(W と一緒)。ずれが小さければ、判断の間に向きが戻っても走り続ける
+  if (sprint && Math.abs(diff) < 0.9) keys.push('ShiftLeft');
   return keys;
 }
 
@@ -163,6 +167,7 @@ function navigate(s, light, key, makeWaypoints, opts) {
     mem.bestAt = s.elapsed;
   } else if (s.elapsed - mem.bestAt > 5) {
     mem.stuck += 1;
+    stuckLog.push({ t: round(s.elapsed), at: [round(s.x), round(s.z)], label: opts.label, target: [round(wp.x), round(wp.z)] });
     mem.planKey = null;
     mem.plan = [];
     mem.nudgeUntil = s.elapsed + 1.2;
@@ -371,7 +376,11 @@ try {
   await page.goto(`${URL_BASE}/?lowfx&speed=${SPEED}`);
   await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.frame ?? 0) > 10, null, { timeout: 120_000 });
   await page.evaluate((seed) => window.__THREE_GAME_TEST_HOOKS__.seed(seed), SEED);
-  await page.getByRole('button', { name: '校舎に入る' }).click();
+  if (START === 'fuse3') {
+    await page.evaluate(() => window.__THREE_GAME_TEST_HOOKS__.setState('fuse3'));
+  } else {
+    await page.getByRole('button', { name: '校舎に入る' }).click();
+  }
 
   while (Date.now() - wallStart < MAX_MS) {
     const s = await snap();
@@ -439,6 +448,8 @@ const summary = {
   batteryEmptyAt,
   exhaustions,
   stuckNudges: mem.stuck,
+  stuckLog,
+  start: START,
   arrivedIdle: mem.idle,
   safeWaits: mem.waits,
   consoleErrors,
