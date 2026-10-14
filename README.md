@@ -10,6 +10,10 @@ Poppy Playtime のような一人称ホラーに、「持ち物 + 動物」を�
 |---|---|---|---|
 | ![](docs/screenshots/showcase.png) | ![](docs/screenshots/penguino.png) | ![](docs/screenshots/active-play.png) | ![](docs/screenshots/jumpscare.png) |
 
+| チョーク・ワニーニ(光に反応) | うわばき・ドラゴンチーノ(音に反応) |
+|---|---|
+| ![](docs/screenshots/wanini.png) | ![](docs/screenshots/dragontino.png) |
+
 作り方の背景(2026年のバイブコーディング事例の調査)は [artifacts/vibe-research.md](artifacts/vibe-research.md) にまとめています。
 
 ## キャラクター
