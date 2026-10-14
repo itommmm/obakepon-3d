@@ -43,7 +43,7 @@ export class Game {
   private readonly hemisphere = new THREE.HemisphereLight('#5a6a8a', '#140c0c', 0.5);
   private readonly fog = new THREE.FogExp2('#050405', FOG_DARK);
   private readonly loop = new Loop(
-    (delta, elapsed) => this.update(delta, elapsed),
+    (delta, elapsed, raw) => this.stepFrame(delta, elapsed, raw),
     () => this.render(),
   );
 
@@ -65,6 +65,12 @@ export class Game {
   private frame = 0;
   /** ?lowfx: 影とポストエフェクトを省いた軽い描画(ボットのプレイテストや低スペック機向け) */
   private readonly lowFx = new URLSearchParams(window.location.search).has('lowfx');
+  /** ?speed=N: テスト用の早送り倍率(1..8)。通常は 1。 */
+  private readonly speed = Math.min(8, Math.max(1, Number(new URLSearchParams(window.location.search).get('speed')) || 1));
+  /** ?speed が付いているときは、実時間を 1/60 秒刻みで進める(描画が遅くても、ゲーム内の時間が実時間に比例する) */
+  private readonly fixedStep = new URLSearchParams(window.location.search).has('speed');
+  private accumulator = 0;
+  private simTime = 0;
   /** テスト用: ガブガブーノの行動を止める(呼び出しによる状態変化は受け付ける) */
   private monsterPaused = false;
   private renderClock = 0;
@@ -255,6 +261,27 @@ export class Game {
 
   private get stage(): number {
     return Math.min(TARGET_FUSES, this.carried + this.inserted);
+  }
+
+  /**
+   * 通常は描画フレームごとに1回 update する(実時間の打ち切りあり)。
+   * ?speed=N のときは、実時間 × N を 1/60 秒刻みに分けて更新する(テスト用の早送り。ルールは変えない)。
+   */
+  private stepFrame(delta: number, elapsed: number, raw: number): void {
+    if (!this.fixedStep) {
+      this.update(delta, elapsed);
+      return;
+    }
+    this.accumulator += Math.min(raw, 0.5) * this.speed;
+    const step = 1 / 60;
+    let n = 0;
+    while (this.accumulator >= step && n < 240) {
+      this.accumulator -= step;
+      this.simTime += step;
+      this.update(step, this.simTime);
+      n += 1;
+    }
+    if (n === 240) this.accumulator = 0;
   }
 
   private update(delta: number, elapsed: number): void {

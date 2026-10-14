@@ -4,7 +4,8 @@ export class Loop {
   private running = false;
 
   constructor(
-    private readonly update: (deltaSeconds: number, elapsedSeconds: number) => void,
+    /** rawSeconds は打ち切り前の実時間(固定刻みで進めたいときに使う) */
+    private readonly update: (deltaSeconds: number, elapsedSeconds: number, rawSeconds: number) => void,
     private readonly render: () => void,
   ) {}
 
@@ -22,9 +23,10 @@ export class Loop {
 
   private readonly tick = (time: number) => {
     if (!this.running) return;
-    const deltaSeconds = Math.min((time - this.lastTime) / 1000, 0.05);
+    const rawSeconds = (time - this.lastTime) / 1000;
+    const deltaSeconds = Math.min(rawSeconds, 0.05);
     this.lastTime = time;
-    this.update(deltaSeconds, time / 1000);
+    this.update(deltaSeconds, time / 1000, rawSeconds);
     this.render();
     this.frameId = requestAnimationFrame(this.tick);
   };
