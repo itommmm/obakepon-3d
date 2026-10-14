@@ -63,6 +63,10 @@ export class Game {
   private rng = createSeededRandom(1);
   private state: AppState = 'title';
   private frame = 0;
+  /** ?lowfx: 影とポストエフェクトを省いた軽い描画(ボットのプレイテストや低スペック機向け) */
+  private readonly lowFx = new URLSearchParams(window.location.search).has('lowfx');
+  /** テスト用: ガブガブーノの行動を止める(呼び出しによる状態変化は受け付ける) */
+  private monsterPaused = false;
   private renderClock = 0;
   private elapsed = 0;
   private carried = 0;
@@ -155,6 +159,11 @@ export class Game {
 
     this.createScene();
     this.postfx = new PostFX(this.renderer, this.scene, this.camera);
+    if (this.lowFx) {
+      this.renderer.shadowMap.enabled = false;
+      this.player.flashlight.castShadow = false;
+      this.tuning.maxDpr = 1;
+    }
     this.resetRun();
     this.setState('title');
     this.resize();
@@ -311,7 +320,7 @@ export class Game {
 
     this.player.update(delta, this.input, this.level, this.tuning, { safe: this.safe, lightOnMonster });
     this.dragontino.pushOut(this.player.position);
-    this.monster.update(delta, elapsed, {
+    if (!this.monsterPaused) this.monster.update(delta, elapsed, {
       playerPosition: this.player.position,
       playerSafe: this.safe,
       noiseRadius: this.player.noiseRadius,
@@ -514,6 +523,10 @@ export class Game {
   private render(): void {
     const intensity = this.player.lightOn ? this.player.flashlight.intensity / this.tuning.flashlightIntensity : 0;
     this.player.beam.update(this.camera, this.player.flashlight, Math.min(1, intensity), this.renderClock);
+    if (this.lowFx) {
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
     this.postfx.update(this.renderClock, this.state === 'playing' || this.state === 'caught' ? this.danger : 0);
     this.postfx.render();
   }
@@ -662,6 +675,9 @@ export class Game {
         if (enabled) for (const fuse of this.fuses) fuse.stabilize();
         this.render();
         this.publishDiagnostics();
+      },
+      pauseMonster: (paused: boolean) => {
+        this.monsterPaused = paused;
       },
       hideDebugUi: (hidden: boolean) => {
         this.debugTools.setHidden(hidden);

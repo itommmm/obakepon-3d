@@ -213,7 +213,7 @@ test('bot playtest: ヒューズを拾ってはめ、捕まって再開できる
   test.setTimeout(900_000);
   const errors = collectErrors(page);
 
-  await page.goto('/');
+  await page.goto('/?lowfx');
   await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.frame ?? 0) > 10);
   await page.evaluate(() => window.__THREE_GAME_TEST_HOOKS__!.seed(12345));
   // タイトル画面のボタンを実際にクリックして開始
@@ -289,7 +289,7 @@ test('bot playtest: 電源復旧後、出口まで走ると脱出できる', asy
   test.skip(testInfo.project.name !== 'desktop-chrome', 'キーボード操作のボットはデスクトップのみ');
   test.setTimeout(300_000);
   const errors = collectErrors(page);
-  await page.goto('/');
+  await page.goto('/?lowfx');
   await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.frame ?? 0) > 10);
   await page.evaluate(async () => {
     await window.__THREE_GAME_TEST_HOOKS__!.seed(7);
@@ -322,11 +322,13 @@ test('bot playtest: ドラゴンチーノは歩けば起きず、走ると起き
   test.skip(testInfo.project.name !== 'desktop-chrome', 'キーボード操作のボットはデスクトップのみ');
   test.setTimeout(900_000);
   const errors = collectErrors(page);
-  await page.goto('/');
+  await page.goto('/?lowfx');
   await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.frame ?? 0) > 10);
   await page.evaluate(() => window.__THREE_GAME_TEST_HOOKS__!.seed(4242));
   await page.getByRole('button', { name: '校舎に入る' }).click();
   await expect.poll(async () => (await sample(page)).state).toBe('playing');
+  // 序盤のガブガブーノは理科準備室の近くを巡回するので、この検証の間は音楽室で止めておく
+  await page.evaluate(() => window.__THREE_GAME_TEST_HOOKS__!.pauseMonster!(true));
   const bot = new Bot(page);
 
   // 1. 昇降口 → 廊下を歩いて、ドラゴンチーノ(17,4)から約4mの(16,3)まで。歩いている間は起きない

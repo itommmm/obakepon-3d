@@ -50,6 +50,8 @@ interface ThreeGameTestHooks {
   setReducedMotion(enabled: boolean): void | Promise<void>;
   /** Hide debug UI (lil-gui) before capturing. */
   hideDebugUi(hidden: boolean): void | Promise<void>;
+  /** ゲーム固有: ガブガブーノの行動を止める(テストの段取り用) */
+  pauseMonster?(paused: boolean): void;
 }
 
 interface Window {
