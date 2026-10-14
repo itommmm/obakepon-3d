@@ -13,6 +13,8 @@ type Snapshot = {
   carried: number;
   inserted: number;
   caughtCount: number;
+  alarms: number;
+  dragontinoAwake: boolean;
   monsterState: string;
   monsterX: number;
   monsterZ: number;
@@ -78,6 +80,8 @@ async function sample(page: Page): Promise<Snapshot> {
       carried: d.fuses.carried,
       inserted: d.fuses.inserted,
       caughtCount: d.caughtCount,
+      alarms: d.allies.alarms,
+      dragontinoAwake: d.allies.dragontinoAwake,
       monsterState: d.monster.state,
       monsterX: d.monster.position.x,
       monsterZ: d.monster.position.z,
@@ -311,5 +315,36 @@ test('bot playtest: 電源復旧後、出口まで走ると脱出できる', asy
   await expect.poll(async () => (await sample(page)).state).toBe('playing');
   const restarted = await sample(page);
   expect(restarted.inserted).toBe(0);
+  expect(errors).toEqual([]);
+});
+
+test('bot playtest: ドラゴンチーノは歩けば起きず、走ると起きてガブガブーノを呼ぶ', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chrome', 'キーボード操作のボットはデスクトップのみ');
+  test.setTimeout(900_000);
+  const errors = collectErrors(page);
+  await page.goto('/');
+  await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.frame ?? 0) > 10);
+  await page.evaluate(() => window.__THREE_GAME_TEST_HOOKS__!.seed(4242));
+  await page.getByRole('button', { name: '校舎に入る' }).click();
+  await expect.poll(async () => (await sample(page)).state).toBe('playing');
+  const bot = new Bot(page);
+
+  // 1. 昇降口 → 廊下を歩いて、ドラゴンチーノ(17,4)から約4mの(16,3)まで。歩いている間は起きない
+  await bot.goTo({ col: 16, row: 3 });
+  const walked = await bot.tick();
+  expect(walked.dragontinoAwake, '歩いて近づいても起きないこと').toBe(false);
+  expect(walked.alarms).toBe(0);
+
+  // 2. その場から走ると、足音で起きる(ガブガブーノが呼ばれる)
+  await bot.driveTo(
+    { x: 13 * CELL + 1.5, z: 4 * CELL + 1.5 },
+    { tolerance: 0.6, sprint: true, timeoutMs: 20_000, stop: (s) => s.alarms > 0 || s.state !== 'playing' },
+  );
+  await bot.release();
+  const after = await bot.tick();
+  expect(after.alarms, '走るとドラゴンチーノが起きること').toBeGreaterThan(0);
+  expect(['investigate', 'alert', 'chase']).toContain(after.monsterState);
+  await expect(page.locator('#toast')).toContainText('ドラゴンチーノ');
+  console.log(`dragontino playtest: ${JSON.stringify({ alarms: after.alarms, monster: after.monsterState, errors })}`);
   expect(errors).toEqual([]);
 });
