@@ -38,3 +38,22 @@
 - Tripo / Hunyuan3D でガブガブーノの高精細版を作り、SDF 版と見比べる
 - Blender MCP でリギングとアニメーションを付ける
 - ElevenLabs で「ガブガブーノ…」の声を収録する
+
+## グラフィックの作り込みに使ったスキル(GitHub から導入)
+
+| スキル | 出典 | 使った内容 | 実装 |
+|---|---|---|---|
+| **shader-dev** | [MiniMax-AI/skills](https://github.com/MiniMax-AI/skills)(MIT) | `ambient-occlusion`(SDF を5回サンプリングする AO)、`sdf-tricks`(表面近くだけ FBM で細部を足す)、`procedural-noise` | `render/sdf.ts` の `occlusion()` で頂点カラーに AO を焼き込む。`roughen()` で革のシワと紙のよれを足す |
+| **threejs-shaders** | [CloudAI-X/threejs-skills](https://github.com/CloudAI-X/threejs-skills)(MIT) | onBeforeCompile で組み込みマテリアルを拡張する方法、リムライト | `render/surfaceDetail.ts`: FBM の手続きバンプ(革のシボ、布目)と、状態で色が変わるリムライト |
+| **threejs-postprocessing** | 同上 | EffectComposer ではアンチエイリアスが効かなくなるという指摘と、その対策 | `render/PostFX.ts`: マルチサンプルの描画先(MSAA ×4)で、追加パスなしにアンチエイリアスを取り戻す |
+
+効果の比較(同じ視点):
+
+| 導入前 | 導入後 |
+|---|---|
+| ![](../docs/screenshots/showcase-before-skills.png) | ![](../docs/screenshots/showcase.png) |
+
+- 革にシワとシボの凹凸が入り、使い込んだランドセルらしくなった
+- アゴの下や脚の付け根に AO の陰影がつき、立体感が増した
+- 輪郭のギザギザが減った
+- 追跡中は、輪郭が赤いリムライトで暗闇に浮かぶ

@@ -84,12 +84,62 @@ export function smax(a: number, b: number, k: number): number {
   return -smin(-a, -b, k);
 }
 
+// ---------- ノイズ(shader-dev スキルの procedural-noise / sdf-tricks を TypeScript に移植) ----------
+
+function hash3(x: number, y: number, z: number): number {
+  let h = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453123;
+  h -= Math.floor(h);
+  return h;
+}
+
+function valueNoise3(x: number, y: number, z: number): number {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  const iz = Math.floor(z);
+  const fx = x - ix;
+  const fy = y - iy;
+  const fz = z - iz;
+  const ux = fx * fx * (3 - 2 * fx);
+  const uy = fy * fy * (3 - 2 * fy);
+  const uz = fz * fz * (3 - 2 * fz);
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+  const c = (dx: number, dy: number, dz: number) => hash3(ix + dx, iy + dy, iz + dz);
+  return lerp(
+    lerp(lerp(c(0, 0, 0), c(1, 0, 0), ux), lerp(c(0, 1, 0), c(1, 1, 0), ux), uy),
+    lerp(lerp(c(0, 0, 1), c(1, 0, 1), ux), lerp(c(0, 1, 1), c(1, 1, 1), ux), uy),
+    uz,
+  );
+}
+
+/** -0.5..0.5 付近の FBM(オクターブごとに周波数2倍・振幅半分) */
+export function fbm3(x: number, y: number, z: number, octaves = 3): number {
+  let sum = 0;
+  let amplitude = 0.5;
+  let frequency = 1;
+  for (let i = 0; i < octaves; i += 1) {
+    sum += amplitude * (valueNoise3(x * frequency, y * frequency, z * frequency) - 0.5);
+    frequency *= 2.03;
+    amplitude *= 0.5;
+  }
+  return sum;
+}
+
 // ---------- スカルプト ----------
 
 type Op = { kind: 'add' | 'carve'; field: Field; k: number; color: THREE.Color };
 
 export class Sculpt {
   private readonly ops: Op[] = [];
+  private detail: { amplitude: number; frequency: number; band: number } | null = null;
+
+  /**
+   * 表面の近くだけ FBM ノイズで凹凸を足す(革のシワ・布のよれ)。
+   * 表面から離れるほど効果を消して、距離場の性質(Lipschitz 連続性)を壊さない。
+   */
+  roughen(amplitude: number, frequency: number, band = 0.12): this {
+    this.detail = { amplitude, frequency, band };
+    return this;
+  }
 
   /** なめらかに足す(k = なじませる幅、m) */
   add(field: Field, color: THREE.ColorRepresentation, k = 0): this {
@@ -109,7 +159,28 @@ export class Sculpt {
       const v = op.field(x, y, z);
       d = op.kind === 'add' ? (d === Infinity ? v : smin(d, v, op.k)) : smax(d, -v, op.k);
     }
+    if (this.detail && Math.abs(d) < this.detail.band) {
+      const fade = 1 - Math.abs(d) / this.detail.band;
+      const f = this.detail.frequency;
+      d += this.detail.amplitude * fbm3(x * f, y * f, z * f) * fade * fade * (3 - 2 * fade);
+    }
     return d;
+  }
+
+  /**
+   * SDF アンビエントオクルージョン(shader-dev / ambient-occlusion の5サンプル法)。
+   * 法線方向に少しずつ離れた点の距離が「期待値より小さい」ほど、くぼみ = 暗い。
+   */
+  occlusion(x: number, y: number, z: number, nx: number, ny: number, nz: number, reach: number): number {
+    let occ = 0;
+    let weight = 1;
+    for (let i = 0; i < 5; i += 1) {
+      const h = reach * (0.08 + (0.92 * i) / 4);
+      const d = this.distance(x + nx * h, y + ny * h, z + nz * h);
+      occ += (h - d) * weight;
+      weight *= 0.75;
+    }
+    return Math.min(1, Math.max(0, 1 - (2.2 / reach) * occ));
   }
 
   /** 表面の色: その点で一番「効いている」形の色。 */
@@ -129,8 +200,11 @@ export class Sculpt {
     return out.copy(best);
   }
 
-  /** Surface Nets でメッシュ化する。cell = 格子の間隔(m)。 */
-  mesh(min: Vec3, max: Vec3, cell: number): THREE.BufferGeometry {
+  /**
+   * Surface Nets でメッシュ化する。cell = 格子の間隔(m)。
+   * aoReach > 0 なら、その距離までの遮蔽を頂点カラーに焼き込む。
+   */
+  mesh(min: Vec3, max: Vec3, cell: number, aoReach = 0.25): THREE.BufferGeometry {
     const nx = Math.ceil((max[0] - min[0]) / cell) + 1;
     const ny = Math.ceil((max[1] - min[1]) / cell) + 1;
     const nz = Math.ceil((max[2] - min[2]) / cell) + 1;
@@ -242,6 +316,10 @@ export class Sculpt {
       normals[n * 3 + 1] = gy / length;
       normals[n * 3 + 2] = gz / length;
       this.colorAt(x, y, z, color);
+      if (aoReach > 0) {
+        const ao = this.occlusion(x, y, z, gx / length, gy / length, gz / length, aoReach);
+        color.multiplyScalar(0.3 + 0.7 * ao);
+      }
       colors[n * 3] = color.r;
       colors[n * 3 + 1] = color.g;
       colors[n * 3 + 2] = color.b;

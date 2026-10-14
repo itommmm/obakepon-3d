@@ -9,6 +9,7 @@ import {
   transform,
   type Field,
 } from '../render/sdf';
+import { applySurfaceDetail, type SurfaceDetailHandle } from '../render/surfaceDetail';
 import { createNameTagTexture } from '../world/textures';
 
 export type EyeMode = 'patrol' | 'alert' | 'chase' | 'stunned';
@@ -51,7 +52,8 @@ function finField(root: [number, number, number], tip: [number, number, number],
 
 /** 本体: ランドセル + 背びれ + 尾びれ + エラ + 口の中 + 下の歯 + 背負いベルト */
 function sculptBody(): THREE.BufferGeometry {
-  const s = new Sculpt();
+  // 使い込んだランドセルの革のシワ(FBM の凹凸)
+  const s = new Sculpt().roughen(0.014, 4.5);
   s.add(sdRoundBox([0, 0, 0], [0.75, 0.85, 0.45], 0.22), RED);
   // ランドセルらしい、丸く盛り上がった天面
   s.add(sdEllipsoid([0, 0.7, -0.04], [0.72, 0.26, 0.43]), RED, 0.12);
@@ -88,7 +90,7 @@ function sculptBody(): THREE.BufferGeometry {
 
 /** かぶせ(アゴ): 蝶番 = 原点。少し反った板 + 上の歯 + 留め金 + 目のくぼみ */
 function sculptJaw(): THREE.BufferGeometry {
-  const s = new Sculpt();
+  const s = new Sculpt().roughen(0.01, 5);
   const flap = sdRoundBox([0, -0.63, 0.06], [0.78, 0.66, 0.05], 0.04);
   // 下にいくほど前に反らせる
   s.add((x, y, z) => flap(x, y, z + 0.1 * ((y + 0.63) / 0.66) ** 2), RED_DARK);
@@ -156,6 +158,7 @@ export class GabugabunoModel {
   private readonly fins: THREE.Group[] = [];
   private readonly eyeMaterial: THREE.MeshStandardMaterial;
   private readonly glow: THREE.PointLight;
+  private readonly rims: SurfaceDetailHandle[] = [];
   private readonly disposables: { dispose(): void }[] = [];
   private walkPhase = 0;
   private chompPhase = 0;
@@ -167,6 +170,9 @@ export class GabugabunoModel {
       new THREE.MeshPhysicalMaterial({ vertexColors: true, roughness: 0.48, clearcoat: 0.55, clearcoatRoughness: 0.35 }),
     );
     const matte = this.track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78 }));
+    // 革のシボ / 布目の細かい凹凸と、輪郭のリムライト(threejs-shaders の onBeforeCompile 拡張)
+    this.rims.push(applySurfaceDetail(leather, { scale: 22, strength: 0.35, rimPower: 2.5 }));
+    this.rims.push(applySurfaceDetail(matte, { scale: 55, strength: 0.18, rimPower: 2.5 }));
     const add = (parent: THREE.Object3D, geometry: THREE.BufferGeometry, material: THREE.Material) => {
       const mesh = new THREE.Mesh(this.track(geometry), material);
       mesh.castShadow = true;
@@ -266,6 +272,9 @@ export class GabugabunoModel {
     this.eyeMaterial.emissive.set(emissive);
     this.eyeMaterial.emissiveIntensity = intensity;
     this.glow.intensity = glow;
+    // 追跡中は輪郭が赤く浮かび、徘徊中はうっすら青白く
+    const rim = { patrol: [0.05, '#9fb6ff'], alert: [0.12, '#ffc23a'], chase: [0.35, '#ff2020'], stunned: [0, '#000000'] } as const;
+    for (const handle of this.rims) handle.setRim(rim[mode][0], rim[mode][1]);
   }
 
   /** ジャンプスケア: 口をカメラの高さまで下げ、大きく開く。 */

@@ -65,7 +65,10 @@ export class PostFX {
 
   constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) {
     const size = renderer.getDrawingBufferSize(new THREE.Vector2());
-    this.composer = new EffectComposer(renderer);
+    // ポストエフェクトを通すとキャンバスの MSAA が効かなくなるので、
+    // 描画先をマルチサンプルにしてアンチエイリアスを取り戻す(追加パス不要)
+    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+    this.composer = new EffectComposer(renderer, target);
     this.composer.addPass(new RenderPass(scene, camera));
     // 目、非常灯、ヒューズ、出口サインなど「強く光るもの」だけがにじむように閾値を高めに
     this.bloom = new UnrealBloomPass(size.clone().multiplyScalar(0.5), 0.6, 0.4, 1.5);

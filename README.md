@@ -52,6 +52,7 @@ npm run dev
 - **音**: Web Audio だけで手続き的に生成する。開始時と遠くで歪んで鳴る学校のチャイム、方向がわかる足音と噛みつき音(HRTF)、近づくと速くなる心拍、低いドローン音、叫び声など。
 - **ビジュアル(すべてバイブ生成。外部の画像や3Dモデルは0)**
   - **SDF スカルプト**: ガブガブーノとペンギーノは、距離関数をなめらかに合成して彫り、Surface Nets でメッシュ化している(`src/render/sdf.ts`)。
+  - **SDF の陰影と質感**: AO を頂点に焼き込み、FBM のシワを足し、シェーダで革のシボとリムライトを付ける(`src/render/sdf.ts`、`src/render/surfaceDetail.ts`)。
   - **ポストエフェクト**: ブルーム(目や非常灯)、危険度で強まる色収差と赤い脈動、周辺減光、フィルムグレイン(`src/render/PostFX.ts`)。
   - **懐中電灯の光の筋と、光の中に浮かぶチリ**: シェーダのみで描く(`src/render/FlashlightBeam.ts`)。
   - **校舎**: 壁、木の床、掲示物、黒板、下駄箱とランドセル、長机と給食。Canvas とジオメトリの合成で作る。
@@ -68,7 +69,7 @@ npm run dev
 | ライティング | 懐中電灯のスポットライト(影あり)、非常灯、電源復旧で点く天井灯、指数フォグ |
 | 乱数 | シード付きRNG(`utils/random.ts`)。テストを再現可能にするため、ゲームプレイの乱数はすべてここを通す |
 | 3Dモデル | SDF スカルプト + Surface Nets(`src/render/sdf.ts`)。起動時に生成する |
-| 描画 | WebGL + EffectComposer(RenderPass → UnrealBloom → Output → ホラー仕上げシェーダ) |
+| 描画 | WebGL + EffectComposer(MSAA×4 → UnrealBloom → Output → ホラー仕上げシェーダ) |
 | テスト用フック | `window.__THREE_GAME_TEST_HOOKS__`(状態: `title` / `active-play` / `chase` / `showcase` / `penguino` / `jumpscare` / `caught` / `finale` / `complete`)と `window.__THREE_GAME_DIAGNOSTICS__` |
 
 ### ディレクトリ
@@ -83,7 +84,7 @@ game/
   src/game/      ゲーム進行(Game.ts)
   tests/         Playwright(画面確認、ボットによるプレイテスト)
 artifacts/       企画書、進行メモ、バイブコーディングの調査メモ(vibe-research.md)
-.claude/skills/  ゲーム制作用の Claude Code スキル(threejs-game-skills)
+.claude/skills/  ゲーム制作用の Claude Code スキル(threejs-game-skills、shader-dev、CloudAI-X/threejs-skills)
 ```
 
 ### 開発用コマンド

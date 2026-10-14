@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { applySurfaceDetail } from '../render/surfaceDetail';
 import { Sculpt, sdCapsule, sdEllipsoid, sdRoundBox, sdRoundCone, sdSphere, smax, transform } from '../render/sdf';
 import type { Level } from '../world/Level';
 
@@ -29,7 +30,8 @@ function cartonLabel(): THREE.CanvasTexture {
 
 /** 牛乳パックの体を持つペンギン(SDF スカルプト)。原点 = 足元。 */
 function sculptPenguino(): THREE.BufferGeometry {
-  const s = new Sculpt();
+  // 少しよれた紙パック
+  const s = new Sculpt().roughen(0.006, 7);
   const white = '#d9d7d0';
   const blue = '#2f6fd1';
   const orange = '#e59a2c';
@@ -77,6 +79,7 @@ export class Penguino {
   ) {
     const geometry = sculptPenguino();
     const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82 });
+    applySurfaceDetail(material, { scale: 30, strength: 0.12 }).setRim(0.06, '#cfe0ff');
     this.disposables.push(geometry, material);
     const mesh = new THREE.Mesh(geometry, material);
     mesh.castShadow = true;
