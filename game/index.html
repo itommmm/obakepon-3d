@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#050405" />
     <link rel="icon" href="data:," />
-    <title>おばけポン — ポンポン玩具工場</title>
+    <title>おばけポン — よふけの小学校</title>
   </head>
   <body>
     <main id="app" data-state="title">
@@ -21,10 +21,10 @@
         <div id="objective" class="plate">
           <div class="plate-head">
             <span class="hazard" aria-hidden="true"></span>
-            <span id="objective-label">作業指示</span>
+            <span id="objective-label">れんらくちょう</span>
           </div>
-          <p id="objective-text">ヒューズを探して配電盤にはめろ</p>
-          <div id="fuse-slots" aria-label="配電盤のヒューズ">
+          <p id="objective-text">ヒューズを探して分電盤にはめろ</p>
+          <div id="fuse-slots" aria-label="分電盤のヒューズ">
             <span class="fuse-slot"></span>
             <span class="fuse-slot"></span>
             <span class="fuse-slot"></span>
@@ -58,10 +58,10 @@
 
       <section id="title-screen" class="overlay">
         <div class="title-card">
-          <p class="eyebrow">第1章 ポンポン玩具工場</p>
+          <p class="eyebrow">第1章 よふけの ポンポン小学校</p>
           <h1 class="logo">おばけ<span>ポン</span></h1>
-          <p class="tagline">「まだ ここで まってるよ」</p>
-          <button id="start-button" class="primary" type="button">工場に入る</button>
+          <p class="tagline">「まだ ほうかご だよ。ガブガブーノと あそぼ」</p>
+          <button id="start-button" class="primary" type="button">校舎に入る</button>
           <ul class="controls">
             <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移動</li>
             <li><kbd>マウス</kbd> 見回す</li>
@@ -88,7 +88,7 @@
       </section>
 
       <section id="caught-screen" class="overlay" hidden>
-        <p class="caught-text">つかまえた。</p>
+        <p class="caught-text">ガブッ。</p>
         <p class="caught-sub" id="caught-sub">チェックポイントから再開します…</p>
       </section>
 
@@ -100,7 +100,7 @@
             <div><dt>時間</dt><dd id="result-time">00:00</dd></div>
             <div><dt>つかまった回数</dt><dd id="result-caught">0</dd></div>
           </dl>
-          <p class="tagline small">外は静かだった。でも、背中のリュックが すこし 重い。</p>
+          <p class="tagline small">外は静かだった。でも、背中のランドセルが すこし 重い。</p>
           <button id="again-button" class="primary" type="button">もう一度あそぶ</button>
         </div>
       </section>

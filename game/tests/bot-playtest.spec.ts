@@ -213,7 +213,7 @@ test('bot playtest: ヒューズを拾ってはめ、捕まって再開できる
   await page.waitForFunction(() => (window.__THREE_GAME_DIAGNOSTICS__?.frame ?? 0) > 10);
   await page.evaluate(() => window.__THREE_GAME_TEST_HOOKS__!.seed(12345));
   // タイトル画面のボタンを実際にクリックして開始
-  await page.getByRole('button', { name: '工場に入る' }).click();
+  await page.getByRole('button', { name: '校舎に入る' }).click();
   await expect.poll(async () => (await sample(page)).state).toBe('playing');
 
   const bot = new Bot(page);
@@ -228,18 +228,18 @@ test('bot playtest: ヒューズを拾ってはめ、捕まって再開できる
   await expect(page.locator('#carry-value')).toHaveText('1');
   const timeToFirstFuse = (Date.now() - started) / 1000;
 
-  // 2. 中央ホールの配電盤へ(配電盤の東側)
+  // 2. 多目的ホールの分電盤へ(分電盤の東側)
   await bot.goTo({ col: 10, row: 12 });
   const caughtBefore = (await bot.tick()).caughtCount;
   await bot.driveTo({ x: 9 * CELL + 1.5 + 1.6, z: 12 * CELL + 1.5 }, { tolerance: 0.5 });
   await expect(page.locator('#prompt-text')).toContainText('ヒューズをはめる');
   await bot.press('KeyE');
   const afterInsert = await bot.tick();
-  expect(afterInsert.inserted, 'E で配電盤にはめられること').toBe(1);
+  expect(afterInsert.inserted, 'E で分電盤にはめられること').toBe(1);
   await expect(page.locator('.fuse-slot.filled')).toHaveCount(1);
   const timeToInsert = (Date.now() - started) / 1000;
 
-  // 3. わざとポンちゃんに近づいて捕まる → チェックポイントから再開
+  // 3. わざとガブガブーノに近づいて捕まる → チェックポイントから再開
   let caughtSnap: Snapshot | null = null;
   const recklessDeadline = Date.now() + 90_000 * SLOW;
   while (Date.now() < recklessDeadline) {
@@ -262,7 +262,7 @@ test('bot playtest: ヒューズを拾ってはめ、捕まって再開できる
   expect(respawned.caughtCount).toBe(caughtBefore + 1);
   expect(
     Math.hypot(respawned.x - (9 * CELL + 1.5 + 1.6), respawned.z - (12 * CELL + 1.5)),
-    '配電盤前のチェックポイントから再開すること',
+    '分電盤前のチェックポイントから再開すること',
   ).toBeLessThan(0.8);
   expect(respawned.inserted, '再開後もはめたヒューズは残ること').toBe(1);
 

@@ -61,7 +61,7 @@ test('renders a nonblank interactive game canvas', async ({ page }, testInfo) =>
   expect(sample, JSON.stringify(sample)).toMatchObject({ ok: true });
 
   // タイトルの開始ボタンを押し、W で前進できること(開始時は南向き = +z 方向)
-  await page.getByRole('button', { name: '工場に入る' }).click();
+  await page.getByRole('button', { name: '校舎に入る' }).click();
   await page.waitForFunction(() => window.__THREE_GAME_DIAGNOSTICS__?.state === 'playing');
   const before = await page.evaluate(() => window.__THREE_GAME_DIAGNOSTICS__?.player.position.z ?? 0);
   await page.keyboard.down('KeyW');

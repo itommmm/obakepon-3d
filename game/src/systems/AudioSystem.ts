@@ -87,7 +87,7 @@ export class AudioSystem {
     }
   }
 
-  /** 毎フレーム呼ぶ: 心拍と遠くのおもちゃの声 */
+  /** 毎フレーム呼ぶ: 心拍と、遠くのチャイムや噛みつき音 */
   tick(danger: number, randomValue: () => number, playerPosition: THREE.Vector3): void {
     if (!this.ready || !this.context || !this.heartGain) return;
     const now = this.context.currentTime;
@@ -106,7 +106,8 @@ export class AudioSystem {
         2,
         playerPosition.z + Math.sin(angle) * 18,
       );
-      this.toyGiggle(position);
+      if (randomValue() < 0.5) this.chime(position, true);
+      else this.distantChomps(position);
     }
   }
 
@@ -306,27 +307,65 @@ export class AudioSystem {
     }
   }
 
-  private toyGiggle(position: THREE.Vector3): void {
+  /**
+   * 学校のチャイム(キーンコーンカーンコーン)。distant = true なら遠くで、遅く、音程が狂って鳴る。
+   */
+  chime(position: THREE.Vector3 | null, distant = false): void {
+    const ctx = this.context;
+    if (!this.ready || !ctx || !this.master) return;
+    const destination = position ? this.panner(position, 8, 80) : this.master;
+    const notes = distant ? [659, 523, 587, 392] : [659, 523, 587, 392, 392, 587, 659, 523];
+    const step = distant ? 1.05 : 0.75;
+    const now = ctx.currentTime;
+    notes.forEach((freq, i) => {
+      const detune = distant ? 1 - i * 0.012 : 1;
+      const t = now + i * step;
+      for (const [harmonic, level] of [
+        [1, 0.16],
+        [2.76, 0.05],
+        [5.4, 0.02],
+      ]) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq * harmonic * detune, t);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(level * (distant ? 0.8 : 0.5), t + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + step * 2.2);
+        osc.connect(gain).connect(destination);
+        osc.start(t);
+        osc.stop(t + step * 2.3);
+      }
+    });
+  }
+
+  /** 噛み鳴らす音「ガブッ」: 低い打撃 + 歯がぶつかる硬い音 */
+  chomp(position: THREE.Vector3, level = 1): void {
+    const ctx = this.context;
+    if (!this.ready || !ctx) return;
+    const panner = this.panner(position, 5, 60);
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.exponentialRampToValueAtTime(60, now + 0.12);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.7 * level, now + 0.008);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+    osc.connect(gain).connect(panner);
+    osc.start(now);
+    osc.stop(now + 0.2);
+    this.noiseBurst(panner, now, 0.06, 3200, 0.5 * level, 'bandpass');
+  }
+
+  private distantChomps(position: THREE.Vector3): void {
     const ctx = this.context;
     if (!ctx) return;
-    const panner = this.panner(position, 6, 60);
-    const now = ctx.currentTime;
-    // 壊れたおもちゃの笑い声: 揺れる三角波が上下する
-    for (let i = 0; i < 6; i += 1) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'triangle';
-      const t = now + i * 0.14;
-      const base = 620 - i * 30;
-      osc.frequency.setValueAtTime(base * 1.25, t);
-      osc.frequency.exponentialRampToValueAtTime(base * 0.8, t + 0.12);
-      gain.gain.setValueAtTime(0.0001, t);
-      gain.gain.exponentialRampToValueAtTime(0.3, t + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.13);
-      osc.connect(gain).connect(panner);
-      osc.start(t);
-      osc.stop(t + 0.14);
-    }
+    // 遠くで「ガブ…ガブ…ガブーノ…」
+    [0, 0.45, 1.3].forEach((offset) => {
+      window.setTimeout(() => this.chomp(position, 0.5), offset * 1000);
+    });
   }
 
   private panner(position: THREE.Vector3, refDistance: number, maxDistance: number): PannerNode {

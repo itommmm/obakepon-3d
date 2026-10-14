@@ -95,7 +95,7 @@ export class Game {
       onNotice: () => {
         this.audio.noticeSting();
         if (this.state !== 'playing') return;
-        this.hud.toast(this.firstSighting ? '見つかった — 走れ!ライトを当てると怯む' : '見つかった!', {
+        this.hud.toast(this.firstSighting ? 'ガブガブーノに見つかった — 走れ!ライトを当てると怯む' : '見つかった!', {
           danger: true,
           seconds: this.firstSighting ? 4 : 2,
         });
@@ -106,6 +106,7 @@ export class Game {
         if (this.state === 'playing') this.hud.toast('…見失ったようだ', { seconds: 2.5 });
       },
       onFootstep: (position, loudness) => this.audio.monsterFootstep(position, loudness),
+      onChomp: (position) => this.audio.chomp(position),
     });
     this.hud = new Hud({
       onStart: () => this.startGame(),
@@ -164,7 +165,8 @@ export class Game {
     this.resetRun();
     this.setState('playing');
     this.input.requestLock();
-    this.hud.toast('工場の電源が落ちている。ヒューズを3本 探せ', { seconds: 5 });
+    this.hud.toast('停電している。ヒューズを3本 探して分電盤へ', { seconds: 5 });
+    window.setTimeout(() => this.audio.chime(null), 400);
   }
 
   private resumeGame(): void {
@@ -228,6 +230,11 @@ export class Game {
     else if (this.state === 'caught') this.updateCaught(delta, elapsed);
 
     this.audio.updateListener(this.camera);
+    this.syncHud(delta);
+    this.publishDiagnostics();
+  }
+
+  private syncHud(delta: number): void {
     this.hud.update(
       {
         inserted: this.inserted,
@@ -243,14 +250,13 @@ export class Game {
       },
       delta,
     );
-    this.publishDiagnostics();
   }
 
   private objectiveText(): string {
     if (this.powered) return '電源復旧!出口(右下)へ走れ';
-    if (this.carried > 0) return '中央ホールの配電盤にヒューズをはめろ';
+    if (this.carried > 0) return '多目的ホールの分電盤にヒューズをはめろ';
     if (this.inserted > 0) return `残りのヒューズを探せ(あと${TARGET_FUSES - this.inserted}本)`;
-    return 'ヒューズを探して配電盤にはめろ';
+    return 'ヒューズを探して分電盤にはめろ';
   }
 
   private updatePlaying(delta: number, elapsed: number): void {
@@ -328,13 +334,13 @@ export class Game {
         this.prompt = `ヒューズをはめる(${this.carried}本)`;
         if (this.input.consumePress('KeyE')) this.insertFuses();
       } else {
-        this.prompt = `配電盤 ${this.inserted}/${TARGET_FUSES} — ヒューズが足りない`;
+        this.prompt = `分電盤 ${this.inserted}/${TARGET_FUSES} — ヒューズが足りない`;
       }
       return;
     }
     const exitDistance = Math.hypot(this.level.exitFront.x - position.x, this.level.exitFront.z - position.z);
     if (exitDistance < 2.5 && !this.powered) {
-      this.prompt = '扉は電気で閉ざされている';
+      this.prompt = '電気がないと 扉が開かない';
     }
     this.input.consumePress('KeyE');
   }
@@ -344,9 +350,9 @@ export class Game {
     this.carried += 1;
     this.audio.pickup();
     const total = this.carried + this.inserted;
-    if (total === 1) this.hud.toast('…遠くで 何かが 起きあがった', { danger: true, seconds: 3.5 });
-    else if (total === 2) this.hud.toast('足音が 近づいてくる気がする', { danger: true, seconds: 3 });
-    else this.hud.toast('最後のヒューズだ。配電盤へ戻れ', { seconds: 3 });
+    if (total === 1) this.hud.toast('…どこかで チャイムが鳴った。上履きの足音がする', { danger: true, seconds: 3.5 });
+    else if (total === 2) this.hud.toast('「ガブ…ガブ…」 近づいてくる', { danger: true, seconds: 3 });
+    else this.hud.toast('最後のヒューズだ。分電盤へ戻れ', { seconds: 3 });
   }
 
   private insertFuses(): void {
@@ -360,7 +366,7 @@ export class Game {
     if (this.inserted >= TARGET_FUSES) {
       this.powerOn();
     } else {
-      this.hud.toast(`配電盤 ${this.inserted}/${TARGET_FUSES}`, { seconds: 2.5 });
+      this.hud.toast(`分電盤 ${this.inserted}/${TARGET_FUSES}`, { seconds: 2.5 });
     }
   }
 
@@ -372,7 +378,7 @@ export class Game {
     this.audio.powerOn();
     this.audio.doorOpen(this.level.exitFront);
     this.hud.flash(false, 0.6, 900);
-    this.hud.toast('電源が戻った — でも、ポンちゃんが 目を覚ました。出口へ走れ!', { danger: true, seconds: 5 });
+    this.hud.toast('電気が戻った — ガブガブーノが怒っている。昇降口の出口へ走れ!', { danger: true, seconds: 5 });
     this.monster.stun(3.5);
   }
 
@@ -404,7 +410,7 @@ export class Game {
     this.camera.position.x += Math.sin(elapsed * 90) * shake;
     this.camera.position.y += Math.cos(elapsed * 77) * shake;
     if (t > 0.9 && t - delta <= 0.9) {
-      this.hud.revealCaught(this.inserted > 0 ? '配電盤の前から再開します…' : '入口から再開します…');
+      this.hud.revealCaught(this.inserted > 0 ? '分電盤の前から再開します…' : '入口から再開します…');
     }
     if (t >= CAUGHT_DURATION) this.respawn();
   }
@@ -482,7 +488,7 @@ export class Game {
           this.setState('title');
         } else if (name === 'active-play') {
           this.setState('playing');
-          // 中央ホール: 配電盤とコンベアと看板が見える位置
+          // 多目的ホール: 分電盤と長机と学校目標が見える位置
           this.placePlayer({ col: 13, row: 12 }, { col: 9, row: 11 }, 1.3);
         } else if (name === 'chase') {
           this.setState('playing');
@@ -520,7 +526,7 @@ export class Game {
           this.player.flashlight.intensity = 4;
           this.hud.revealCaught('入口から再開します…');
         } else if (name === 'finale') {
-          // 電源復旧直後: 出口へ向かう最後の直線(ポンちゃんは遠くで怯んでいる)
+          // 電源復旧直後: 出口へ向かう最後の直線(ガブガブーノは遠くで怯んでいる)
           this.inserted = TARGET_FUSES;
           this.level.setFuseLamps(TARGET_FUSES);
           this.powerOn();
@@ -542,6 +548,7 @@ export class Game {
           this.caughtCount = 2;
           this.escape();
         }
+        this.syncHud(0);
         this.render();
         this.publishDiagnostics();
         return { state: name };

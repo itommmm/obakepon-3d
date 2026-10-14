@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CELL, LEVEL_MAP, WALL_HEIGHT, type Cell } from './levelData';
 import {
+  createChalkboardTexture,
+  createClassmatesTexture,
+  createMottoTexture,
   createCeilingTexture,
   createFloorTexture,
   createPosterTexture,
@@ -28,7 +31,8 @@ const FACING_VECTOR: Record<Facing, [number, number]> = {
 };
 
 const SAFE_RADIUS = 2.6;
-const TOY_COLORS = ['#c98b9c', '#86b7bb', '#d9bf7a', '#9fa6cf', '#b7cf9b', '#d79e7a', '#e9e2d6'];
+const RANDOSERU_COLORS = ['#b3141e', '#1c1c22', '#c8607c', '#24366e', '#6b3a22', '#b3141e', '#1c1c22'];
+const TOE_COLORS = ['#c4262f', '#2f6fd1', '#2c9b4a', '#e0b52c'];
 
 /** 色付きの箱ジオメトリ(頂点カラー付き、マージ用)。 */
 function coloredBox(
@@ -61,22 +65,34 @@ function paint(geometry: THREE.BufferGeometry, color: THREE.ColorRepresentation)
   return geometry;
 }
 
-/** 床に転がる小さなおばけのぬいぐるみ。 */
-function plushGeometry(color: THREE.ColorRepresentation, scale = 1): THREE.BufferGeometry {
-  const head = new THREE.SphereGeometry(0.22 * scale, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2);
-  head.translate(0, 0.26 * scale, 0);
-  const body = new THREE.CylinderGeometry(0.22 * scale, 0.27 * scale, 0.26 * scale, 14, 1, true);
-  body.translate(0, 0.13 * scale, 0);
-  const eyeL = new THREE.SphereGeometry(0.035 * scale, 6, 4);
-  eyeL.translate(-0.08 * scale, 0.3 * scale, 0.19 * scale);
-  const eyeR = eyeL.clone();
-  eyeR.translate(0.16 * scale, 0, 0);
-  return mergeGeometries([
-    paint(head.toNonIndexed(), color),
-    paint(body.toNonIndexed(), color),
-    paint(eyeL.toNonIndexed(), '#111'),
-    paint(eyeR.toNonIndexed(), '#111'),
-  ])!;
+/** ランドセル(原点 = 底面の中心、前面 = +z)。 */
+function randoseruGeometry(color: THREE.ColorRepresentation, scale = 1): THREE.BufferGeometry {
+  const base = new THREE.Color(color);
+  const dark = base.clone().multiplyScalar(0.72);
+  const w = 0.32 * scale;
+  const h = 0.36 * scale;
+  const d = 0.2 * scale;
+  const parts = [
+    coloredBox(w, h, d, 0, h / 2, 0, base),
+    // かぶせ(上面から前面の上2/3)
+    coloredBox(w + 0.01 * scale, 0.025 * scale, d + 0.01 * scale, 0, h + 0.005 * scale, 0, dark),
+    coloredBox(w + 0.01 * scale, h * 0.66, 0.025 * scale, 0, h - (h * 0.66) / 2, d / 2 + 0.008 * scale, dark),
+    // 金具
+    coloredBox(0.05 * scale, 0.035 * scale, 0.02 * scale, 0, h * 0.36, d / 2 + 0.024 * scale, '#c9a446'),
+  ];
+  return mergeGeometries(parts.map((part) => part.toNonIndexed()))!;
+}
+
+/** 上履き1足(原点 = 底面の中心、つま先 = +z)。 */
+function uwabakiGeometry(toeColor: THREE.ColorRepresentation, scale = 1): THREE.BufferGeometry {
+  const parts: THREE.BufferGeometry[] = [];
+  for (const side of [-1, 1]) {
+    const x = side * 0.065 * scale;
+    parts.push(coloredBox(0.1 * scale, 0.03 * scale, 0.25 * scale, x, 0.015 * scale, 0, '#d8d2c4'));
+    parts.push(coloredBox(0.092 * scale, 0.06 * scale, 0.17 * scale, x, 0.06 * scale, -0.03 * scale, '#f1efe8'));
+    parts.push(coloredBox(0.096 * scale, 0.045 * scale, 0.07 * scale, x, 0.05 * scale, 0.09 * scale, toeColor));
+  }
+  return mergeGeometries(parts.map((part) => part.toNonIndexed()))!;
 }
 
 export class Level {
@@ -89,7 +105,7 @@ export class Level {
   readonly lightCells: Cell[] = [];
   readonly breakerCell: Cell;
   readonly exitCell: Cell;
-  /** 配電盤の前(ヒューズをはめる位置)と、プレイヤーの向き */
+  /** 分電盤の前(ヒューズをはめる位置)と、出口の前 */
   readonly breakerFront = new THREE.Vector3();
   readonly exitFront = new THREE.Vector3();
 
@@ -392,7 +408,7 @@ export class Level {
     floorTexture.repeat.set(this.width, this.height);
     const floor = new THREE.Mesh(
       this.track(new THREE.PlaneGeometry(worldW, worldD)),
-      this.track(new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 0.86, metalness: 0.04 })),
+      this.track(new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 0.55, metalness: 0.02 })),
     );
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(worldW / 2, 0, worldD / 2);
@@ -410,9 +426,9 @@ export class Level {
     this.group.add(ceiling);
 
     this.buildWalls(rng);
-    this.buildShelves(rng);
-    this.buildConveyors(rng);
-    this.buildPlushes(rng);
+    this.buildLockers(rng);
+    this.buildDesks(rng);
+    this.buildClutter(rng);
     this.buildEmergencyLights();
     this.buildCeilingLights();
     this.buildBreaker();
@@ -464,10 +480,11 @@ export class Level {
     this.group.add(beams);
   }
 
-  private buildShelves(rng: Rng): void {
+  /** 'S' = 両面の下駄箱・ロッカー。マスごとに中身(ランドセル、上履き)が違う3種類を使い回す。 */
+  private buildLockers(rng: Rng): void {
     const cells = this.cellsOf('S');
-    const variants = [0, 1, 2].map(() => this.shelfGeometry(rng));
-    const material = this.track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0.08 }));
+    const variants = [0, 1, 2].map(() => this.lockerGeometry(rng));
+    const material = this.track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0.05 }));
     variants.forEach((geometry, variant) => {
       const mine = cells.filter((_, index) => index % 3 === variant);
       const mesh = new THREE.InstancedMesh(this.track(geometry), material, mine.length);
@@ -484,58 +501,77 @@ export class Level {
     });
   }
 
-  private shelfGeometry(rng: Rng): THREE.BufferGeometry {
+  private lockerGeometry(rng: Rng): THREE.BufferGeometry {
     const parts: THREE.BufferGeometry[] = [];
     const w = CELL - 0.6;
     const d = CELL - 0.04;
-    const h = 3.7;
-    const metal = '#3b4246';
-    for (const sx of [-1, 1]) {
-      for (const sz of [-1, 1]) {
-        parts.push(coloredBox(0.09, h, 0.09, (sx * (w - 0.09)) / 2, h / 2, (sz * (d - 0.09)) / 2, metal));
-      }
-    }
-    const levels = [0.18, 1.12, 2.06, 3.0];
-    for (const y of levels) {
-      parts.push(coloredBox(w, 0.06, d, 0, y, 0, '#4a4f50'));
-      parts.push(coloredBox(w, 0.12, 0.05, 0, y - 0.04, d / 2 - 0.03, '#a3462f'));
-      parts.push(coloredBox(w, 0.12, 0.05, 0, y - 0.04, -d / 2 + 0.03, '#a3462f'));
-      // おもちゃの箱とぬいぐるみ
-      let z = -d / 2 + 0.15;
-      while (z < d / 2 - 0.4) {
-        const bd = 0.35 + rng() * 0.55;
-        const bh = 0.3 + rng() * 0.5;
-        const bw = 0.5 + rng() * (w - 0.8);
-        if (rng() > 0.18) {
-          const color = TOY_COLORS[Math.floor(rng() * TOY_COLORS.length)];
-          const tilt = rng() > 0.85;
-          const box = new THREE.BoxGeometry(bw, bh, bd);
-          if (tilt) box.rotateY((rng() - 0.5) * 0.6);
-          box.translate((rng() - 0.5) * (w - bw) * 0.8, y + 0.03 + bh / 2, z + bd / 2);
-          parts.push(paint(box, color));
-        } else if (y < 3) {
-          const plush = plushGeometry(rng() > 0.5 ? '#e9e2d6' : '#d8c3c8', 1.3);
-          plush.translate((rng() - 0.5) * (w - 0.6), y + 0.03, z + 0.25);
-          parts.push(plush);
+    const h = 2.5;
+    const wood = '#9a7448';
+    const woodDark = '#6e5132';
+    const interior = '#2a1f16';
+    const columns = 4;
+    const rows = 5;
+    const cubbyD = d / columns;
+    const levelH = (h - 0.15) / rows;
+    // 外枠、天板、台座、中央の背板
+    parts.push(coloredBox(w, 0.05, d, 0, h, 0, woodDark));
+    parts.push(coloredBox(w, 0.15, d, 0, 0.075, 0, woodDark));
+    parts.push(coloredBox(0.04, h, d, 0, h / 2, 0, interior));
+    for (const z of [-d / 2, d / 2]) parts.push(coloredBox(w, h, 0.05, 0, h / 2, z, wood));
+    for (let c = 1; c < columns; c += 1) parts.push(coloredBox(w, h - 0.15, 0.03, 0, 0.15 + (h - 0.15) / 2, -d / 2 + c * cubbyD, wood));
+    for (let r = 1; r < rows; r += 1) parts.push(coloredBox(w, 0.03, d, 0, 0.15 + r * levelH, 0, wood));
+    // 中身: 両面の各マスにランドセルや上履き
+    for (const side of [-1, 1]) {
+      for (let r = 0; r < rows; r += 1) {
+        for (let c = 0; c < columns; c += 1) {
+          const roll = rng();
+          const z = -d / 2 + (c + 0.5) * cubbyD;
+          const y = 0.15 + r * levelH + 0.02;
+          const x = side * w * 0.25;
+          let item: THREE.BufferGeometry | null = null;
+          if (r >= 2 && roll < 0.55) {
+            item = randoseruGeometry(RANDOSERU_COLORS[Math.floor(rng() * RANDOSERU_COLORS.length)], 1.25);
+          } else if (r < 2 && roll < 0.7) {
+            item = uwabakiGeometry(TOE_COLORS[Math.floor(rng() * TOE_COLORS.length)], 1.2);
+          } else if (roll < 0.8) {
+            // 体操服袋
+            item = coloredBox(0.28, 0.3, 0.12, 0, 0.15, 0, rng() > 0.5 ? '#3d6fb0' : '#c45a8c');
+          }
+          if (!item) continue;
+          item.rotateY(side > 0 ? Math.PI / 2 : -Math.PI / 2);
+          item.rotateY((rng() - 0.5) * 0.3);
+          item.translate(x, y, z);
+          parts.push(item);
         }
-        z += bd + 0.08 + rng() * 0.12;
       }
     }
     return mergeGeometries(parts.map((part) => (part.index ? part.toNonIndexed() : part)))!;
   }
 
-  private buildConveyors(rng: Rng): void {
+  /** '=' = 多目的ホールの長机と椅子(机の上に給食のトレーや牛乳パック)。 */
+  private buildDesks(rng: Rng): void {
     const cells = this.cellsOf('=');
     const parts: THREE.BufferGeometry[] = [];
-    parts.push(coloredBox(CELL, 0.7, 1.6, 0, 0.45, 0, '#3a3d3f'));
-    parts.push(coloredBox(CELL, 0.06, 1.5, 0, 0.83, 0, '#151515'));
-    parts.push(coloredBox(CELL, 0.16, 0.1, 0, 0.9, 0.8, '#c9a32b'));
-    parts.push(coloredBox(CELL, 0.16, 0.1, 0, 0.9, -0.8, '#c9a32b'));
-    for (const x of [-1.2, 1.2]) {
-      for (const z of [-0.7, 0.7]) parts.push(coloredBox(0.12, 0.3, 0.12, x, 0.1, z, '#2a2c2d'));
+    const top = '#c9b48a';
+    const steel = '#5c6066';
+    parts.push(coloredBox(CELL - 0.1, 0.05, 1.1, 0, 0.72, 0, top));
+    parts.push(coloredBox(CELL - 0.1, 0.06, 0.04, 0, 0.69, 0.55, '#7a6a52'));
+    parts.push(coloredBox(CELL - 0.1, 0.06, 0.04, 0, 0.69, -0.55, '#7a6a52'));
+    for (const x of [-1.35, 1.35]) {
+      for (const z of [-0.48, 0.48]) parts.push(coloredBox(0.05, 0.7, 0.05, x, 0.35, z, steel));
+    }
+    // 小さな椅子(両側に3脚ずつ)
+    for (const z of [-0.85, 0.85]) {
+      for (const x of [-0.95, 0, 0.95]) {
+        parts.push(coloredBox(0.38, 0.04, 0.36, x, 0.42, z, '#b99a6a'));
+        parts.push(coloredBox(0.38, 0.32, 0.03, x, 0.62, z + Math.sign(z) * 0.17, '#b99a6a'));
+        for (const lx of [-0.16, 0.16]) {
+          for (const lz of [-0.15, 0.15]) parts.push(coloredBox(0.03, 0.42, 0.03, x + lx, 0.21, z + lz, steel));
+        }
+      }
     }
     const geometry = this.track(mergeGeometries(parts.map((part) => part.toNonIndexed()))!);
-    const material = this.track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.35 }));
+    const material = this.track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.15 }));
     const mesh = new THREE.InstancedMesh(geometry, material, cells.length);
     const matrix = new THREE.Matrix4();
     cells.forEach((cell, index) => {
@@ -546,42 +582,68 @@ export class Level {
     mesh.receiveShadow = true;
     this.group.add(mesh);
 
-    // コンベアの上に置き去りのぬいぐるみ(首が取れたものも)
-    const plush = this.track(plushGeometry('#e6ddd0', 1.4));
-    const plushMaterial = this.track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }));
-    const onBelt = new THREE.InstancedMesh(plush, plushMaterial, cells.length);
+    // 机の上の給食(トレー + 器 + 牛乳パック)を置きっぱなしに
+    const lunch: THREE.BufferGeometry[] = [];
+    lunch.push(coloredBox(0.42, 0.02, 0.32, 0, 0.01, 0, '#8fbf9f'));
+    const bowl = new THREE.CylinderGeometry(0.07, 0.05, 0.06, 12);
+    bowl.translate(-0.1, 0.05, 0.02);
+    lunch.push(paint(bowl, '#f2efe6'));
+    lunch.push(coloredBox(0.065, 0.12, 0.065, 0.12, 0.08, -0.05, '#f2f2f2'));
+    lunch.push(coloredBox(0.067, 0.04, 0.067, 0.12, 0.1, -0.05, '#2f6fd1'));
+    const lunchGeometry = this.track(mergeGeometries(lunch.map((part) => part.toNonIndexed()))!);
+    const trays = new THREE.InstancedMesh(lunchGeometry, material, cells.length * 3);
     const rotation = new THREE.Matrix4();
-    cells.forEach((cell, index) => {
-      rotation.makeRotationY(rng() * Math.PI * 2);
-      matrix
-        .makeTranslation((cell.col + 0.5) * CELL + (rng() - 0.5) * 2, 0.86, (cell.row + 0.5) * CELL + (rng() - 0.5) * 0.6)
-        .multiply(rotation);
-      onBelt.setMatrixAt(index, matrix);
-    });
-    onBelt.castShadow = true;
-    this.group.add(onBelt);
+    let count = 0;
+    for (const cell of cells) {
+      for (let k = 0; k < 3; k += 1) {
+        if (rng() < 0.35) continue;
+        rotation.makeRotationY((rng() - 0.5) * 0.6 + (rng() > 0.5 ? Math.PI : 0));
+        matrix
+          .makeTranslation((cell.col + 0.5) * CELL + (k - 1) * 0.95, 0.75, (cell.row + 0.5) * CELL + (rng() > 0.5 ? 0.28 : -0.28))
+          .multiply(rotation);
+        trays.setMatrixAt(count, matrix);
+        count += 1;
+      }
+    }
+    trays.count = count;
+    trays.castShadow = true;
+    this.group.add(trays);
   }
 
-  private buildPlushes(rng: Rng): void {
-    const count = 16;
-    const geometry = this.track(plushGeometry('#d9d0c4', 1.6));
-    const material = this.track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }));
-    const mesh = new THREE.InstancedMesh(geometry, material, count);
+  /** 廊下に落ちているランドセル、上履き、倒れた椅子。 */
+  private buildClutter(rng: Rng): void {
+    const material = this.track(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6 }));
     const matrix = new THREE.Matrix4();
     const rotation = new THREE.Matrix4();
-    const fallen = new THREE.Matrix4();
-    for (let i = 0; i < count; i += 1) {
-      const cell = this.randomFloorCell(rng, (c) => this.charAt(c.col, c.row) === '.');
-      rotation.makeRotationY(rng() * Math.PI * 2);
-      fallen.makeRotationX(rng() > 0.5 ? Math.PI / 2 : 0);
-      matrix
-        .makeTranslation((cell.col + 0.5) * CELL + (rng() - 0.5) * 2.2, 0.02, (cell.row + 0.5) * CELL + (rng() - 0.5) * 2.2)
-        .multiply(rotation)
-        .multiply(fallen);
-      mesh.setMatrixAt(i, matrix);
+    const tilt = new THREE.Matrix4();
+    const place = (geometry: THREE.BufferGeometry, count: number, lie: () => number) => {
+      const mesh = new THREE.InstancedMesh(this.track(geometry), material, count);
+      for (let i = 0; i < count; i += 1) {
+        const cell = this.randomFloorCell(rng, (c) => this.charAt(c.col, c.row) === '.');
+        rotation.makeRotationY(rng() * Math.PI * 2);
+        tilt.makeRotationX(lie());
+        matrix
+          .makeTranslation((cell.col + 0.5) * CELL + (rng() - 0.5) * 2.2, 0.0, (cell.row + 0.5) * CELL + (rng() - 0.5) * 2.2)
+          .multiply(rotation)
+          .multiply(tilt);
+        mesh.setMatrixAt(i, matrix);
+      }
+      mesh.castShadow = true;
+      this.group.add(mesh);
+    };
+    place(randoseruGeometry('#b3141e', 1.5), 8, () => (rng() > 0.5 ? -Math.PI / 2 + 0.02 : 0));
+    place(randoseruGeometry('#1c1c22', 1.5), 5, () => (rng() > 0.5 ? -Math.PI / 2 + 0.02 : 0));
+    place(uwabakiGeometry('#c4262f', 1.4), 10, () => 0);
+    const chair: THREE.BufferGeometry[] = [
+      coloredBox(0.38, 0.04, 0.36, 0, 0.42, 0, '#b99a6a'),
+      coloredBox(0.38, 0.32, 0.03, 0, 0.62, -0.17, '#b99a6a'),
+    ];
+    for (const lx of [-0.16, 0.16]) {
+      for (const lz of [-0.15, 0.15]) chair.push(coloredBox(0.03, 0.42, 0.03, lx, 0.21, lz, '#5c6066'));
     }
-    mesh.castShadow = true;
-    this.group.add(mesh);
+    const chairGeometry = mergeGeometries(chair.map((part) => part.toNonIndexed()))!;
+    // 倒れた椅子は背もたれ側に寝かせる
+    place(chairGeometry, 5, () => (rng() > 0.4 ? -Math.PI / 2 + 0.25 : 0));
   }
 
   private buildEmergencyLights(): void {
@@ -672,7 +734,7 @@ export class Level {
     cabinet.add(cable);
     const label = new THREE.Mesh(
       this.track(new THREE.PlaneGeometry(1.0, 0.38)),
-      this.track(new THREE.MeshStandardMaterial({ map: this.track(createSignTexture('配電盤', '#1a1a1a', '#e3c13b')), roughness: 0.6 })),
+      this.track(new THREE.MeshStandardMaterial({ map: this.track(createSignTexture('分電盤', '#1a1a1a', '#e3c13b')), roughness: 0.6 })),
     );
     label.rotation.y = Math.PI / 2;
     label.position.set(0.53, 2.0, 0);
@@ -725,7 +787,37 @@ export class Level {
     return { position, rotation: FACING_ROTATION[facing] };
   }
 
+  private addWallPlane(
+    texture: THREE.Texture,
+    col: number,
+    row: number,
+    facing: Facing,
+    y: number,
+    width: number,
+    height: number,
+    options: { transparent?: boolean; rotate?: number } = {},
+  ): THREE.Mesh {
+    const { position, rotation } = this.wallFace(col, row, facing, y);
+    const mesh = new THREE.Mesh(
+      this.track(new THREE.PlaneGeometry(width, height)),
+      this.track(
+        new THREE.MeshStandardMaterial({
+          map: this.track(texture),
+          roughness: 0.75,
+          transparent: options.transparent,
+          depthWrite: !options.transparent,
+        }),
+      ),
+    );
+    mesh.position.copy(position);
+    mesh.rotation.y = rotation;
+    mesh.rotation.z = options.rotate ?? 0;
+    this.group.add(mesh);
+    return mesh;
+  }
+
   private buildDecor(rng: Rng): void {
+    // 掲示物(注意喚起、時間割、子どもの絵)
     const posters: [number, number, Facing][] = [
       [5, 2, 'px'],
       [15, 2, 'nx'],
@@ -734,53 +826,46 @@ export class Level {
       [0, 11, 'px'],
       [19, 15, 'nz'],
     ];
-    const posterGeometry = this.track(new THREE.PlaneGeometry(1.2, 1.6));
     posters.forEach(([col, row, facing], index) => {
-      const { position, rotation } = this.wallFace(col, row, facing, 2.1);
-      const material = this.track(
-        new THREE.MeshStandardMaterial({ map: this.track(createPosterTexture(rng, index)), roughness: 0.8 }),
-      );
-      const poster = new THREE.Mesh(posterGeometry, material);
-      poster.position.copy(position);
-      poster.rotation.y = rotation + (rng() - 0.5) * 0.02;
-      poster.rotation.z = (rng() - 0.5) * 0.08;
-      this.group.add(poster);
+      this.addWallPlane(createPosterTexture(rng, index), col, row, facing, 2.0, 1.1, 1.45, {
+        rotate: (rng() - 0.5) * 0.08,
+      });
     });
 
-    // ホールの巨大看板
-    {
-      const { position, rotation } = this.wallFace(12, 8, 'pz', 3.0);
-      const billboard = new THREE.Mesh(
-        this.track(new THREE.PlaneGeometry(2.7, 3.6)),
-        this.track(new THREE.MeshStandardMaterial({ map: this.track(createPosterTexture(rng, 0)), roughness: 0.7 })),
-      );
-      billboard.position.copy(position);
-      billboard.rotation.y = rotation;
-      this.group.add(billboard);
-    }
+    // 多目的ホールの「学校目標」
+    this.addWallPlane(createMottoTexture(), 12, 8, 'pz', 3.0, 3.6, 2.7);
 
+    // 黒板(図書室の前と、音楽室)
+    this.addWallPlane(
+      createChalkboardTexture(rng, ['ガブガブーノ ガブガブーノ', 'ガブガブーノ ガブガブーノ', 'ほうかご まってるよ', 'ガブガブーノ ガブガブーノ', 'ガブ ガブ ガブ ガブ']),
+      10,
+      0,
+      'pz',
+      2.0,
+      5.4,
+      2.0,
+    );
+    this.addWallPlane(
+      createChalkboardTexture(rng, ['きょうの にっちょく', '  ガブガブーノ', 'わすれもの しないように', 'ランドセルは しまおう', 'ガブッ']),
+      20,
+      8,
+      'pz',
+      2.0,
+      4.2,
+      1.6,
+    );
+
+    // 昇降口の掲示板「6ねん2くみの なかまたち」
+    this.addWallPlane(createClassmatesTexture(rng), 2, 0, 'pz', 2.3, 2.8, 1.4);
+
+    // 赤い落書き
     const scrawls: [string, number, number, Facing][] = [
-      ['まってたよ', 5, 9, 'px'],
+      ['ほうかご あそぼ', 5, 9, 'px'],
       ['にげないで', 24, 15, 'nz'],
-      ['ぎゅっ', 23, 19, 'nz'],
+      ['ガブッ', 23, 19, 'nz'],
     ];
-    const scrawlGeometry = this.track(new THREE.PlaneGeometry(2.6, 1.3));
     for (const [text, col, row, facing] of scrawls) {
-      const { position, rotation } = this.wallFace(col, row, facing, 1.6);
-      const scrawl = new THREE.Mesh(
-        scrawlGeometry,
-        this.track(
-          new THREE.MeshStandardMaterial({
-            map: this.track(createScrawlTexture(text)),
-            transparent: true,
-            roughness: 0.6,
-            depthWrite: false,
-          }),
-        ),
-      );
-      scrawl.position.copy(position);
-      scrawl.rotation.y = rotation;
-      this.group.add(scrawl);
+      this.addWallPlane(createScrawlTexture(text), col, row, facing, 1.5, 2.6, 1.3, { transparent: true });
     }
   }
 }
