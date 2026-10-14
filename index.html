@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>おばけ第一小学校 夜の学校おばけポン！</title>
+<script src="vendor/three.min.js"></script>
+<style>
+*{box-sizing:border-box;user-select:none;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:#0d0a24;touch-action:none;font-family:'Zen Maru Gothic','Hiragino Maru Gothic ProN',sans-serif;color:#fff}
+canvas{cursor:none}
+#hud{position:fixed;inset:0;pointer-events:none;padding:calc(8px + env(safe-area-inset-top,0px)) 8px calc(8px + env(safe-area-inset-bottom,0px))}
+#top{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start}
+.title{padding:5px 16px;background:linear-gradient(#5a2a9a,#2a1260);border:2px solid #c8a0ff;border-radius:16px;box-shadow:0 0 18px #9a4aff}
+.title b{display:block;font-size:22px;-webkit-text-stroke:1px #1a0840;text-shadow:0 0 10px #c070ff;line-height:1.2}
+.title small{color:#ffd23a;font-weight:900;font-size:12px}
+.pn{--c:#fff;display:flex;align-items:center;gap:6px;padding:5px 14px;background:#12082ecc;border:2px solid var(--c);border-radius:14px;box-shadow:0 0 14px var(--c);font-weight:900;font-size:14px}
+.pn b{font-size:28px;line-height:1;color:var(--c)}
+.t{--c:#37d6ff}.r{--c:#ff5ad2}.y{--c:#ffd23a}
+.mode{margin-left:auto;background:#f4f1ffee;color:#2a1a4a;padding:4px 18px;border-radius:4px;font-weight:900;text-align:center;transform:rotate(-1deg);font-size:16px}
+.mode small{display:block;font-size:12px}
+#bot{position:absolute;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));display:flex;justify-content:space-between;align-items:flex-end;gap:8px}
+#me{display:flex;align-items:center;gap:8px}
+.av{width:54px;height:54px;border-radius:50%;background:#2a1260;border:3px solid #c8a0ff;display:grid;place-items:center;font-size:30px}
+#hp{font-size:26px;color:#ff4fd0;text-shadow:0 0 8px #ff4fd0;letter-spacing:2px}
+.bar{width:130px;height:10px;border-radius:6px;background:#12082e;border:2px solid #c8a0ff;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#9a4aff,#ff5ad2)}
+#sks{display:flex;gap:10px}
+.sk{position:relative;width:62px;height:68px;border:3px solid #c8a0ff;border-radius:16px;background:#2a1260;color:#fff;font:inherit;padding:2px 0 0;overflow:hidden;cursor:pointer;pointer-events:auto}
+.sk .ic{font-size:26px;display:block}
+.sk em{position:absolute;left:3px;top:2px;font-size:11px;font-style:normal;background:#000a;padding:0 4px;border-radius:4px}
+.sk u{display:block;font-size:11px;text-decoration:none;font-weight:900}
+.sk s{position:absolute;left:0;right:0;bottom:0;height:0;background:#000b}
+.sk.rdy{box-shadow:0 0 16px #ff5ad2;border-color:#ff5ad2}
+#am{padding:6px 14px;background:#12082ecc;border:2px solid #37d6ff;border-radius:14px;box-shadow:0 0 14px #37d6ff;text-align:center;font-weight:900}
+#am b{font-size:26px}#am small{display:block;font-size:11px}
+#xh{position:fixed;left:0;top:0;width:46px;height:46px;margin:-23px 0 0 -23px;border:3px solid #5ec8ff;border-radius:50%;box-shadow:0 0 12px #3aa8ff;pointer-events:none;z-index:6}
+#xh::before,#xh::after{content:"";position:absolute;background:#5ec8ff;left:50%;top:50%}
+#xh::before{width:3px;height:62px;margin:-31px 0 0 -1px}#xh::after{height:3px;width:62px;margin:-1px 0 0 -31px}
+#fx{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+.hpb{position:absolute;transform:translate(-50%,-100%);font-size:12px;font-weight:900;color:#ff9a5a;white-space:nowrap}
+.hpb i{display:block;width:70px;height:7px;background:#000a;border-radius:4px;overflow:hidden}
+.hpb u{display:block;height:100%;background:linear-gradient(90deg,#ff5a2a,#ffb02a)}
+.pt{position:absolute;transform:translate(-50%,-50%);font-weight:900;font-size:24px;color:#ffd23a;text-shadow:0 0 8px #000;animation:pu .7s forwards}
+@keyframes pu{to{transform:translate(-50%,-160%);opacity:0}}
+#fl{position:fixed;inset:0;pointer-events:none;opacity:0}
+.scr{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#0a0624ee;text-align:center;padding:24px;line-height:1.7}
+.scr.off{display:none}
+.scr h2{margin:0;font-size:34px;font-weight:900;-webkit-text-stroke:1px #1a0840;text-shadow:0 0 14px #c070ff;line-height:1.3}
+.scr p{margin:0;font-size:14px;max-width:460px}
+.big{font-size:56px;font-weight:900;color:#ffd23a;line-height:1}
+button.go{font:inherit;font-weight:900;font-size:18px;padding:12px 36px;border:0;border-radius:999px;background:#ffd23a;color:#2a1d00;cursor:pointer}
+#bn{position:fixed;left:0;right:0;top:26%;text-align:center;pointer-events:none;opacity:0;z-index:7;padding:0 12px}
+#bn b{display:block;font-size:34px;font-weight:900;-webkit-text-stroke:1px #1a0840;text-shadow:0 0 14px #ff5ad2}
+#bn small{font-size:15px;font-weight:900;color:#ffe28a;text-shadow:0 0 8px #000}
+#bn.show{animation:bn 2.8s forwards}
+@keyframes bn{0%{opacity:0;transform:scale(.8)}12%{opacity:1;transform:scale(1)}80%{opacity:1}100%{opacity:0}}
+@media(max-width:700px){#bn b{font-size:24px}.title b{font-size:17px}.pn{padding:3px 8px;font-size:11px}.pn b{font-size:20px}.mode{font-size:13px;padding:3px 10px}.bar{width:90px}.sk{width:54px;height:60px}}
+html,body{position:fixed;inset:0;overscroll-behavior:none;-webkit-touch-callout:none;-webkit-text-size-adjust:100%}
+#hud{padding-left:calc(8px + env(safe-area-inset-left,0px));padding-right:calc(8px + env(safe-area-inset-right,0px))}
+#bot{left:calc(8px + env(safe-area-inset-left,0px));right:calc(8px + env(safe-area-inset-right,0px))}
+.scr{padding-left:calc(24px + env(safe-area-inset-left,0px));padding-right:calc(24px + env(safe-area-inset-right,0px));overflow:auto}
+#rot{display:none;position:fixed;inset:0;z-index:20;background:#0a0624;align-items:center;justify-content:center;text-align:center;font-weight:900;font-size:20px;line-height:1.9;padding:24px}
+@media (orientation:portrait) and (max-width:700px){#rot{display:flex}}
+@media (pointer:coarse){.sk em{display:none}#xh{display:none}}
+@media (orientation:landscape) and (max-height:520px){
+  #hud{padding-top:calc(4px + env(safe-area-inset-top,0px));padding-bottom:calc(4px + env(safe-area-inset-bottom,0px))}
+  #top{flex-wrap:nowrap;gap:5px;align-items:center}
+  .title{padding:2px 8px;border-radius:10px}.title b{font-size:12px;-webkit-text-stroke:0}.title small{display:none}
+  .pn{padding:2px 8px;font-size:9px;border-radius:9px;gap:3px;border-width:1.5px;white-space:nowrap}.pn b{font-size:16px}
+  .mode{font-size:10px;padding:2px 8px;white-space:nowrap}.mode small{font-size:8px}
+  #bot{bottom:calc(4px + env(safe-area-inset-bottom,0px))}
+  .av{width:34px;height:34px;font-size:20px;border-width:2px}#hp{font-size:16px}.bar{width:80px;height:7px}
+  #am{padding:2px 8px;border-radius:9px;border-width:1.5px}#am b{font-size:17px}#am small{font-size:8px}
+  #sks{position:absolute;right:0;bottom:46px;flex-direction:column;gap:6px}
+  .sk{width:52px;height:52px;border-radius:12px;border-width:2px;padding:0}.sk .ic{font-size:20px}.sk u{font-size:8px}
+  #bn{top:16%}#bn b{font-size:22px}#bn small{font-size:12px}
+  .scr{gap:6px;line-height:1.5;padding-top:calc(8px + env(safe-area-inset-top,0px));padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
+  .scr h2{font-size:22px}.scr p{font-size:11px;max-width:640px}.big{font-size:38px}button.go{font-size:15px;padding:8px 28px}
+}
+#scb{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+#cards{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.card{width:150px;padding:12px 8px;border:2px solid #ffd23a;border-radius:16px;background:#2a1260;color:#fff;font:inherit;cursor:pointer}
+.card b{display:block;font-size:17px;color:#ffd23a}.card small{display:block;font-size:12px;margin-top:4px;line-height:1.4}
+@media (orientation:landscape) and (max-height:520px){.card{width:136px;padding:8px 6px}.card b{font-size:14px}.card small{font-size:10px}}
+#dfc{display:flex;gap:8px}
+.df{font:inherit;font-weight:900;padding:6px 14px;border-radius:999px;border:2px solid #c8a0ff;background:#2a1260;color:#fff;cursor:pointer}
+.df.on{background:#ffd23a;color:#2a1d00;border-color:#ffd23a}
+</style>
+</head>
+<body>
+<div id="hud">
+  <div id="top">
+    <div class="title"><b>おばけ第一小学校</b><small>夜の学校おばけポン！</small></div>
+    <div class="pn t">⏱ タイム <b id="tm">03:00</b></div>
+    <div class="pn r">👻 のこり <b id="rm">24</b></div>
+    <div class="pn y">💥 コンボ <b id="cb">0</b></div>
+    <div class="mode">通常モード<small>STAGE <span id="stg">1</span> ・ WAVE <span id="wv">1</span><span id="w5"> / 5</span></small></div>
+  </div>
+  <div id="bot">
+    <div id="me"><div class="av">👻</div><div><div id="hp">♥♥♥</div><div class="bar"><i id="sp"></i></div></div></div>
+    <div id="sks">
+      <button class="sk" data-k="z"><em>Z</em><span class="ic">🔦</span><u>ライト</u><s></s></button>
+      <button class="sk" data-k="x"><em>X</em><span class="ic">🔔</span><u>チャイム</u><s></s></button>
+      <button class="sk" data-k="c"><em>C</em><span class="ic">🌀</span><u>スペシャル</u><s></s></button>
+    </div>
+    <div id="am"><b id="ammo">30</b> / 30<small>おばけショット</small></div>
+  </div>
+</div>
+<div id="rot">📱↻<br>スマホを横向きにしてね</div><div id="fx"></div><div id="fl"></div><div id="xh"></div><div id="bn"><b></b><small></small></div>
+<div class="scr" id="st">
+  <h2>おばけ第一小学校<br>夜の学校おばけポン！</h2>
+  <p>誰もいない夜の小学校。教室に置き忘れたおもちゃたちが、愛嬌たっぷりの不気味なおばけに変身して笑ってる…。<br>全5WAVEでボス戦。ボスをたおすと場面が変わります。最終ステージは、奥へ飛ぶスクロール！途中で停電や行進などのイベントが起きます。<br>おばけを直接タップ（PCはクリック）して撃とう。</p>
+  <p>放っておくと飛びかかってきて、ハートが減ります（全3個）。<br>🐤 ヒヨコは味方なので撃たない！ 金のウサギを撃つとフィーバー！<br>🧸 奥から近づくぬいぐまは、着く前に撃つ。WAVEごとにパワーアップを1つ選べます。<br>ライト（Z）：おばけを3秒止める／チャイム（X）：弾とハートを回復<br>スペシャル（C）：ゲージ満タンで全員に大ダメージ（スマホは右のボタン）</p>
+  <div id="dfc"></div><button class="go">はじめる</button>
+</div>
+<div class="scr off" id="sc2"><h2 id="sct">ステージクリア！</h2><p id="scp"></p><div id="scb"></div></div>
+  <div class="scr off" id="up"><h2>パワーアップ！</h2><p>ひとつえらんでね</p><div id="cards"></div></div>
+  <div class="scr off" id="en">
+  <h2 id="et">おしまい！</h2><div class="big" id="fs">0</div><p id="rk"></p><p id="bs"></p>
+  <button class="go">もう一度あそぶ</button>
+</div>
+
+<script src="src/main.js"></script>
+</body>
+</html>

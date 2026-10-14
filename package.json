@@ -1,0 +1,11 @@
+{
+  "name": "obakepon-3d",
+  "version": "2.0.0",
+  "private": true,
+  "description": "おばけ第一小学校 夜の学校おばけポン！（three.js）",
+  "scripts": {
+    "build": "python3 tools/build.py",
+    "test": "node tools/smoke.mjs \"$PWD/dist/obakepon.html\""
+  },
+  "devDependencies": { "playwright": "^1.47.2" }
+}
