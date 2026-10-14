@@ -25,7 +25,7 @@ for (const vp of [{ width:1280, height:720 }, { width:844, height:390, isMobile:
   await pg.screenshot({ path:`/tmp/claude-0/shot_${vp.width}_boss.png` });
   const st = await pg.evaluate(() => ({ space:G.space, stage:G.stage, boss:!!G.sboss, se:SE.length, run:G.run }));
   console.log(vp.width, JSON.stringify(st));
-  await pg.evaluate(() => { G.sboss.hp = 1; sHit(G.sboss); }); await pg.waitForTimeout(800);
+  await pg.waitForFunction(() => !!G.sboss, null, { timeout:10000 }); await pg.evaluate(() => { G.sboss.hp = 1; sHit(G.sboss); }); await pg.waitForTimeout(800);
   console.log(vp.width, 'ended:', await pg.evaluate(() => document.querySelector('#et').textContent));
   await pg.close();
 }

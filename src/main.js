@@ -325,7 +325,7 @@ const onWave = w => {
 const stageClear = () => {
   G.hold = true; const bonus = 500 * (G.stage + 1); G.score += bonus;
   $('#sct').textContent = 'ステージ' + (G.stage + 1) + 'クリア！';
-  $('#scp').textContent = 'ボーナス +' + bonus + '点。つぎのステージに進むと、ハート1個かいふく・のこり時間+60秒・パワーアップ1回。そのかわり、おもちゃがつよくなります。' + (G.stage === 1 ? 'つぎは最終ステージ（スクロール）！' : '');
+  $('#scp').textContent = 'ボーナス +' + bonus + '点。つぎのステージに進むと、ハート1個かいふく・のこり時間+60秒・パワーアップ1回。そのかわり、おもちゃがつよくなります。' + (G.stage === 0 ? 'つぎは真夜中の図書室！' : G.stage === 1 ? 'つぎは最終ステージ、夜の廊下を飛ぶよ！' : '');
   const box = $('#scb'); box.innerHTML = '';
   [['つぎのステージへ', () => { G.stage++; G.k0 = G.kills; G.kpw = Math.min(12, 6 + 2 * G.stage); G.hp = Math.min(G.mh, G.hp + 1); G.left += 60; G.ph2 = 0; G.bsT = 4; G.wave = 1; G.hold = false; mon.slice().forEach(rm); $('#sc2').classList.add('off'); applyTheme(Math.min(G.stage, 2)); if (G.stage >= 2) startSpace(); else offerUp(1); }],
    ['ここでおわる', () => { G.hold = false; $('#sc2').classList.add('off'); end('clear'); }]].forEach(([t, f]) => { const b = document.createElement('button'); b.className = 'go'; b.textContent = t; b.onclick = f; box.append(b); });
@@ -347,28 +347,65 @@ const offerUp = w => {
   });
   $('#up').classList.remove('off'); sfx(660, .3, 'triangle');
 };
+// ===== 図書室（ステージ2）=====
+const LIB = new THREE.Group(); LIB.visible = false; S.add(LIB);
+const SPINE = (rows, seed) => tex(256, 64 * rows, x => {
+  x.fillStyle = '#3a2214'; x.fillRect(0, 0, 256, 64 * rows); const pal = ['#c0392b', '#2e86de', '#27ae60', '#f39c12', '#8e44ad', '#e67e22', '#16a085', '#ecf0f1', '#d35400'];
+  for (let r = 0; r < rows; r++) { let px = 6; while (px < 250) { const w = 8 + (Math.sin(px * 7.1 + r * 3 + seed) + 1) * 6, h = 40 + (Math.cos(px * 3.3 + r + seed) + 1) * 8; x.fillStyle = pal[(px * 13 + r * 5 + seed) % pal.length | 0]; x.fillRect(px, 64 * r + 60 - h, w - 1, h); x.fillStyle = '#ffffff55'; x.fillRect(px + 2, 64 * r + 64 - h + 4, w - 5, 3); px += w; } x.fillStyle = '#5a3620'; x.fillRect(0, 64 * r + 58, 256, 6); }
+});
+const shelf = (w, h, d, x, z, ry, rows, seed) => {
+  const g = new THREE.Group(); g.position.set(x, 0, z); g.rotation.y = ry; LIB.add(g);
+  box(w, h, d, M(0x5a3620), 0, h / 2, 0, g);
+  const f = new THREE.Mesh(new THREE.PlaneGeometry(w * .94, h * .92), new THREE.MeshLambertMaterial({ map:SPINE(rows, seed) })); f.position.set(0, h / 2, d / 2 + .01); g.add(f);
+};
+for (let i = 0; i < 5; i++) shelf(1.7, 2.6, .5, -3.6 + i * 1.8, -6.65, 0, 4, i * 11);
+for (const s of [-1, 1]) for (let i = 0; i < 3; i++) shelf(2.2, 1.1, .45, s * 4.25, -4 + i * 3.2, -s * Math.PI / 2, 2, i * 7 + (s > 0 ? 40 : 0));
+{ const sg = new THREE.Mesh(new THREE.PlaneGeometry(1.4, .45), new THREE.MeshBasicMaterial({ map:tex(224, 72, x => { x.fillStyle = '#f4ecd8'; x.fillRect(0, 0, 224, 72); x.strokeStyle = '#5a3620'; x.lineWidth = 6; x.strokeRect(3, 3, 218, 66); x.fillStyle = '#3a2214'; x.font = '900 40px "Hiragino Maru Gothic ProN",sans-serif'; x.textAlign = 'center'; x.fillText('図書室', 112, 51); }) })); sg.position.set(0, 2.85, -6.38); LIB.add(sg); }
 // ===== 場面転換（テーマ）=====
 const THEMES = [
   { name:'夜の教室', wall:0x5f86b8, bg:0x0d0a24, fog:0x1a1240, hemi:0xffd8a8, pts:[0xff5ad2, 0x4ad0ff, 0xffc060], win:0xffffff },
-  { name:'あかね色の教室', wall:0xd49a7c, bg:0x2a1420, fog:0x3a1c28, hemi:0xffc890, pts:[0xff9a4a, 0xff5a9a, 0xffd060], win:0xff9a6a },
-  { name:'おもちゃ宇宙', wall:0, bg:'sky', fog:0x9a6ab0, fn:30, ff:130, hemi:0xffffff, pts:[0xff9ad0, 0x9ad0ff, 0xfff0b0], win:0xffffff }
+  { name:'真夜中の図書室', wall:0x7a5236, bg:0x120a10, fog:0x24141a, hemi:0xffd0a0, pts:[0xffb060, 0xff7ab0, 0xffe0a0], win:0xb0c0ff },
+  { name:'夜の廊下', wall:0, bg:0x080818, fog:0x0c0c24, fn:28, ff:105, hemi:0xffffff, pts:[0xff9ad0, 0x9ad0ff, 0xfff0b0], win:0xffffff }
 ];
-const SPSKY = tex(4, 256, x => { const g = x.createLinearGradient(0, 0, 0, 256); g.addColorStop(0, '#1a1050'); g.addColorStop(.55, '#a04aa8'); g.addColorStop(.8, '#ff9ac0'); g.addColorStop(1, '#ffe0b0'); x.fillStyle = g; x.fillRect(0, 0, 4, 256); });
 const applyTheme = i => {
-  const t = THEMES[i]; ROOMW.material.color.set(t.wall); S.background = t.bg === 'sky' ? SPSKY : new THREE.Color(t.bg);
+  const t = THEMES[i]; ROOMW.material.color.set(t.wall); S.background = new THREE.Color(t.bg); LIB.visible = i === 1;
   S.fog.color.set(t.fog); S.fog.near = t.fn || 9; S.fog.far = t.ff || 24; LT[0][0].color.set(t.hemi);
   [2, 3, 4].forEach((j, n) => LT[j][0].color.set(t.pts[n])); WINS.forEach(w => w.material.color.set(t.win));
 };
-// ===== 最終ステージ：奥へスクロール（スペースハリアー風）=====
+// ===== 最終ステージ：夜の廊下を奥へスクロール（スペースハリアー風）=====
 const SPG = new THREE.Group(); SPG.visible = false; S.add(SPG);
-const GT = rep2(tex(64, 64, x => { x.fillStyle = '#3ad0b0'; x.fillRect(0, 0, 64, 64); x.fillStyle = '#2aa88f'; x.fillRect(0, 0, 32, 32); x.fillRect(32, 32, 32, 32); x.fillStyle = '#ff9ad0'; x.fillRect(0, 31, 64, 2); })); GT.repeat.set(10, 40);
-const gnd = new THREE.Mesh(new THREE.PlaneGeometry(60, 400), new THREE.MeshBasicMaterial({ map:GT })); gnd.rotation.x = -Math.PI / 2; gnd.position.set(0, 0, -150); SPG.add(gnd);
-const CL = Array.from({ length:12 }, () => { const c = spr(0xffffff, 1); c.scale.set(10 + Math.random() * 8, 4 + Math.random() * 3, 1); c.position.set((Math.random() - .5) * 60, 6 + Math.random() * 8, -Math.random() * 130); c.material.opacity = .4; SPG.add(c); return c; });
+const GT = rep2(tex(128, 128, x => { for (let i = 0; i < 8; i++) { x.fillStyle = `hsl(28,42%,${30 + (i * 37 % 9)}%)`; x.fillRect(0, i * 16, 128, 15); x.fillStyle = '#2a1608'; x.fillRect((i * 53) % 128, i * 16, 2, 16); } })); GT.repeat.set(4, 40);
+const CORW = 6.6, CORH = 6.4, JP = '900 26px "Hiragino Maru Gothic ProN",sans-serif';
+const WT = rep2(tex(256, 160, x => { // 左の壁：月明かりの窓
+  x.fillStyle = '#d8d0b8'; x.fillRect(0, 0, 256, 160); x.fillStyle = '#5a4a3a'; x.fillRect(0, 112, 256, 48); x.fillStyle = '#3a2e22'; x.fillRect(0, 110, 256, 4);
+  const g = x.createLinearGradient(0, 18, 0, 100); g.addColorStop(0, '#1c2470'); g.addColorStop(1, '#3a54b8'); x.fillStyle = g; x.fillRect(24, 18, 208, 84);
+  x.fillStyle = '#fff6c8'; x.beginPath(); x.arc(190, 40, 9, 0, 7); x.fill(); x.fillStyle = '#ffffffaa'; [[60, 30], [110, 50], [150, 28]].forEach(([a, b]) => x.fillRect(a, b, 2, 2));
+  x.strokeStyle = '#6a6a78'; x.lineWidth = 6; x.strokeRect(24, 18, 208, 84); x.beginPath(); x.moveTo(128, 18); x.lineTo(128, 102); x.stroke();
+})); WT.repeat.set(40, 1);
+const DOORS = ['1-1', '1-2', '2-1', '2-2', '3-1', '音楽室'];
+const DT = rep2(tex(1536, 160, x => { // 右の壁：教室の引き戸と学級札
+  x.fillStyle = '#d8d0b8'; x.fillRect(0, 0, 1536, 160); x.fillStyle = '#5a4a3a'; x.fillRect(0, 112, 1536, 48);
+  DOORS.forEach((n, i) => { const o = i * 256;
+    x.fillStyle = '#9a6a40'; x.fillRect(o + 30, 22, 100, 138); x.fillStyle = '#8a5a34'; x.fillRect(o + 126, 22, 100, 138);
+    x.fillStyle = '#2a3270'; x.fillRect(o + 44, 36, 70, 40); x.fillRect(o + 140, 36, 70, 40); x.fillStyle = '#d0c070'; x.fillRect(o + 110, 92, 8, 14);
+    x.fillStyle = '#ffffff'; x.fillRect(o + 92, 2, 72, 18); x.fillStyle = '#222'; x.font = JP.replace('26px', '16px'); x.textAlign = 'center'; x.fillText(n, o + 128, 17);
+    x.fillStyle = ['#ffb0c8', '#b0e0ff', '#fff0a0'][i % 3]; x.fillRect(o + 236, 40, 16, 22); });
+})); DT.repeat.set(400 / 60, 1);
+const CT = rep2(tex(64, 128, x => { x.fillStyle = '#b8b4a8'; x.fillRect(0, 0, 64, 128); x.fillStyle = '#eef6ff'; x.fillRect(22, 30, 20, 68); x.fillStyle = '#9a968a'; x.fillRect(0, 0, 64, 2); })); CT.repeat.set(1, 40);
+const corr = (w, h, t, x, y, rx, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map:t, side:THREE.DoubleSide, color:0x8a90c0 })); m.position.set(x, y, -150); m.rotation.set(rx, ry, 0); SPG.add(m); return m; };
+corr(400, CORH, WT, -CORW, CORH / 2, 0, Math.PI / 2); corr(400, CORH, DT, CORW, CORH / 2, 0, -Math.PI / 2); corr(CORW * 2, 400, CT, 0, CORH, Math.PI / 2, 0);
+const gnd = new THREE.Mesh(new THREE.PlaneGeometry(CORW * 2, 400), new THREE.MeshBasicMaterial({ map:GT, color:0x9a9ac0 })); gnd.rotation.x = -Math.PI / 2; gnd.position.set(0, 0, -150); SPG.add(gnd);
+const CL = [];
 const PL = new THREE.Group(); BUILD.chick(PL); PL.scale.setScalar(2.3); { const gl = spr(0x6fe0ff, 1.1); gl.position.set(0, -.25, .2); PL.add(gl); } PL.rotation.y = Math.PI; SPG.add(PL); // 自機：ひよっこ号
 const SE = [], SB = [];
 const sEnemy = (kind, x, y, z) => { const k = K[kind], g = new THREE.Group(); BUILD[kind](g); g.scale.setScalar(2.2); g.position.set(x, y, z); SPG.add(g);
   const e = { g, k, hp:k.hp, x0:x, y0:y, a:1 + Math.random() * 2.5, f:.8 + Math.random() * 1.2, ph:Math.random() * 6, r:Math.max(k.w, k.h) * 1.1, v:6 + Math.random() * 8 }; SE.push(e); return e; };
-const sObst = () => { const h = 1.6 + Math.random() * 2.6, g = new THREE.Group(); box(1.3, h, 1.3, M(BC[Math.random() * 5 | 0]), 0, h / 2, 0, g); box(1.5, .25, 1.5, M(0xffffff), 0, h + .12, 0, g); g.position.set((Math.random() - .5) * 11, 0, -130); SPG.add(g); SE.push({ g, h, obst:1, r:.95 }); };
+const sObst = () => { // 跳び箱（段数で高さが変わる）
+  const n = 3 + (Math.random() * 4 | 0), h = n * .5, g = new THREE.Group();
+  for (let i = 0; i < n; i++) { const w = 1.6 - i * .05; box(w, .48, 1.1 - i * .03, M(i % 2 ? 0xc89a60 : 0xb88a50), 0, .25 + i * .5, 0, g); box(w * .5, .08, .02, M(0x3a2a1a), 0, .25 + i * .5, .56 - i * .015, g); }
+  box(1.5 - n * .05, .14, 1.05 - n * .03, M(0xf4f0e8), 0, h + .07, 0, g);
+  g.position.set((Math.random() - .5) * 9.5, 0, -130); SPG.add(g); SE.push({ g, h:h + .14, obst:1, r:.95 });
+};
 const sKill = e => { SPG.remove(e.g); disp(e.g); const i = SE.indexOf(e); i >= 0 && SE.splice(i, 1); e.bar && e.bar.remove(); if (e.boss) { G.sboss = null; G.shk = .9 * RMO; end('clear'); } };
 const sHit = (e, d = 1) => {
   e.hp -= d; burst(e.g.position, 0x9fe8ff, 3);
@@ -385,21 +422,21 @@ const setSpace = on => {
 };
 const startSpace = () => {
   mon.slice().forEach(rm); setSpace(true); applyTheme(2); Object.assign(G, { stt:0, ss:1, sf:0, sbt:3, sboss:null, bs:0, ph2:0 });
-  PL.position.set(0, 1.5, 0); banner('STAGE 3  FINAL', 'ひよっこ号で空へ！ボスまでつき進め'); sfx(330, .6, 'triangle', .08);
+  PL.position.set(0, 1.5, 0); banner('STAGE 3  FINAL  夜の廊下', 'ひよっこ号で廊下をつき進め！跳び箱はとびこえるか、よけて'); sfx(330, .6, 'triangle', .08);
 };
 const sOrb = q => { const s = spr(0xff4fd8, 1.3), tz = Math.max(.5, -q.z / 55); s.position.copy(q); SPG.add(s);
   const o = { g:s, k:{ pts:10, col:0xff4fd8 }, hp:1, orb:1, r:.55, vx:(PL.position.x - q.x) / tz, vy:(PL.position.y - q.y) / tz, vz:55 }; SE.push(o); return o; };
 const spStep = dt => {
   const SPD = 24 + 3 * Math.min(G.stt / 20, 3), sl = G.freeze > 0 ? .35 : 1; G.stt += dt;
-  GT.offset.y += SPD * sl * dt / 10; CL.forEach(c => { c.position.z += SPD * .5 * sl * dt; if (c.position.z > 10) c.position.set((Math.random() - .5) * 60, 6 + Math.random() * 8, -130); });
-  const tx = (ptr.x / innerWidth * 2 - 1) * 4.6, ty = .9 + (1 - ptr.y / innerHeight) * 3.4, k = Math.min(1, dt * 8);
+  GT.offset.y += SPD * sl * dt / 10; WT.offset.x += SPD * sl * dt / 10; DT.offset.x -= SPD * sl * dt / 60; CT.offset.y += SPD * sl * dt / 10; CL.forEach(c => { c.position.z += SPD * .5 * sl * dt; if (c.position.z > 10) c.position.set((Math.random() - .5) * 60, 6 + Math.random() * 8, -130); });
+  const tx = (ptr.x / innerWidth * 2 - 1) * 4.6, ty = .9 + (1 - ptr.y / innerHeight) * 3.6, k = Math.min(1, dt * 8);
   PL.position.x += (tx - PL.position.x) * k; PL.position.y += (ty - PL.position.y) * k; PL.rotation.z = (PL.position.x - tx) * .08;
   C.position.set(PL.position.x * .6 + (Math.random() - .5) * G.shk * .3, PL.position.y * .45 + 1.9 + (Math.random() - .5) * G.shk * .3, 7); G.shk = Math.max(0, G.shk - dt * 2); C.lookAt(PL.position.x * .3, PL.position.y * .4 + 1, -20);
   if ((G.sf -= dt) <= 0) { G.sf = .13; const b = spr(0x6fe0ff, .5); b.position.set(PL.position.x, PL.position.y + .3, -1); SPG.add(b); SB.push(b); }
   for (const b of SB.slice()) { b.position.z -= 95 * dt; if (b.position.z < -120) { SPG.remove(b); disp(b); SB.splice(SB.indexOf(b), 1); } }
   if (G.stt >= 50 && !G.bs) { // ボス登場
     G.bs = 1; const e = sEnemy('boss', 0, 2.8, -75); e.g.scale.setScalar(1.6); e.boss = 1; e.r = 3.4; e.hp = e.mx = 45; G.sboss = e;
-    e.bar = document.createElement('div'); e.bar.className = 'hpb'; e.bar.innerHTML = 'HP <b>45/45</b><i><u style="width:100%"></u></i>'; $('#fx').append(e.bar); banner('FINAL BOSS', 'ミス・ニコニコ・ギガ！');
+    e.bar = document.createElement('div'); e.bar.className = 'hpb'; e.bar.innerHTML = 'HP <b>45/45</b><i><u style="width:100%"></u></i>'; $('#fx').append(e.bar); banner('FINAL BOSS', '廊下のおくから、ミス・ニコニコ・ギガ！');
   }
   if (!G.sboss && G.stt < 50 && (G.ss -= dt) <= 0) {
     G.ss = Math.max(.5, 1 - G.stt / 80) * DIFF[DIFFI].gap;
