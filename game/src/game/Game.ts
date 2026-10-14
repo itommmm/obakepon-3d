@@ -5,7 +5,9 @@ import { createRenderer, resizeRenderer } from '../core/Renderer';
 import { PostFX } from '../render/PostFX';
 import { Fuse } from '../entities/Fuse';
 import { Monster } from '../entities/Monster';
+import { Dragontino } from '../entities/Dragontino';
 import { Penguino } from '../entities/Penguino';
+import { Wanini } from '../entities/Wanini';
 import { Player } from '../entities/Player';
 import { AudioSystem } from '../systems/AudioSystem';
 import { DebugTools, type DebugTuning } from '../systems/DebugTools';
@@ -32,6 +34,9 @@ export class Game {
   private readonly player: Player;
   private readonly monster: Monster;
   private readonly penguino: Penguino;
+  private readonly wanini: Wanini;
+  private readonly dragontino: Dragontino;
+  private alarms = 0;
   private readonly fuses: Fuse[] = [];
   private readonly audio = new AudioSystem();
   private readonly hud: Hud;
@@ -117,6 +122,19 @@ export class Game {
     this.penguino = new Penguino(this.level, this.level.center({ col: 14, row: 1 }, new THREE.Vector3()), -Math.PI / 2, (position) =>
       this.audio.squeak(position),
     );
+    // 1階廊下を巡回するチョーク・ワニーニ(光に反応する見張り)
+    this.wanini = new Wanini(this.level, (at) => {
+      this.audio.chalkScreech(this.wanini.position);
+      this.callGabugabuno(at, 'キーーッ!チョーク・ワニーニに見つかった。ライトを消せ!');
+    });
+    // 理科準備室の入口で眠るうわばき・ドラゴンチーノ(音に反応する)
+    this.dragontino = new Dragontino(this.level.center({ col: 17, row: 4 }, new THREE.Vector3()), -Math.PI / 2, {
+      onWake: (at) => {
+        this.audio.dragonRoar(this.dragontino.position);
+        this.callGabugabuno(at, 'ドラゴンチーノが起きた!走ると起きる。そっと歩け');
+      },
+      onSnore: (at) => this.audio.snore(at),
+    });
     this.hud = new Hud({
       onStart: () => this.startGame(),
       onResume: () => this.resumeGame(),
@@ -163,6 +181,8 @@ export class Game {
     for (const fuse of this.fuses) fuse.dispose();
     this.monster.dispose();
     this.penguino.dispose();
+    this.wanini.dispose();
+    this.dragontino.dispose();
     this.player.beam.dispose();
     this.postfx.dispose();
     this.level.dispose();
@@ -217,6 +237,9 @@ export class Game {
     this.player.reset(this.checkpoint.position, this.checkpoint.yaw);
     this.monster.reset(this.level.monsterSpawn);
     this.penguino.reset(-Math.PI / 2);
+    this.wanini.reset();
+    this.dragontino.reset();
+    this.alarms = 0;
     this.danger = 0;
     this.hud.clearToast();
   }
@@ -287,6 +310,7 @@ export class Game {
       this.player.illuminates(this.scratch.copy(this.monster.position).setY(1.8), this.level);
 
     this.player.update(delta, this.input, this.level, this.tuning, { safe: this.safe, lightOnMonster });
+    this.dragontino.pushOut(this.player.position);
     this.monster.update(delta, elapsed, {
       playerPosition: this.player.position,
       playerSafe: this.safe,
@@ -298,6 +322,18 @@ export class Game {
     });
 
     this.penguino.update(delta, this.camera);
+    this.wanini.update(delta, elapsed, {
+      position: this.player.position,
+      eye: this.camera.position,
+      lightOn: this.player.lightOn,
+      safe: this.safe,
+    });
+    this.dragontino.update(delta, elapsed, {
+      position: this.player.position,
+      sprinting: this.player.sprinting,
+      moving: this.player.noiseRadius > 0,
+      safe: this.safe,
+    });
     this.updateInteractions();
     if (this.state !== 'playing') return;
 
@@ -360,6 +396,13 @@ export class Game {
       this.prompt = '電気がないと 扉が開かない';
     }
     this.input.consumePress('KeyE');
+  }
+
+  /** 仲間に呼ばれたガブガブーノが、プレイヤーのいた場所へ駆けつける */
+  private callGabugabuno(at: THREE.Vector3, message: string): void {
+    this.alarms += 1;
+    this.monster.summon(at);
+    if (this.state === 'playing') this.hud.toast(message, { danger: true, seconds: 3.5 });
   }
 
   private collectFuse(fuse: Fuse): void {
@@ -484,6 +527,8 @@ export class Game {
     this.scene.add(this.player.beam.dust);
     this.scene.add(this.monster.group);
     this.scene.add(this.penguino.group);
+    this.scene.add(this.wanini.group);
+    this.scene.add(this.dragontino.group);
     this.level.fuseCells.forEach((cell, index) => {
       const fuse = new Fuse(index, this.level.center(cell, new THREE.Vector3(), 0.55));
       this.fuses.push(fuse);
@@ -509,7 +554,7 @@ export class Game {
         this.monster.setRng(this.rng);
       },
       setState: (name: string) => {
-        const known = ['title', 'active-play', 'chase', 'showcase', 'penguino', 'jumpscare', 'caught', 'finale', 'complete'];
+        const known = ['title', 'active-play', 'chase', 'showcase', 'penguino', 'wanini', 'dragontino', 'jumpscare', 'caught', 'finale', 'complete'];
         if (!known.includes(name)) throw new Error(`Unknown test state: ${name}`);
         this.resetRun();
         if (name === 'title') {
@@ -550,6 +595,19 @@ export class Game {
           this.setState('playing');
           this.placePlayer({ col: 11, row: 1 }, { col: 14, row: 1 }, 1.4);
           this.penguino.face(this.player.position);
+        } else if (name === 'wanini') {
+          // 1階廊下: ライトの先で、ワニーニがこちらに気づいて鳴いている
+          this.setState('playing');
+          this.placePlayer({ col: 7, row: 16 }, { col: 11, row: 16 }, 0.6);
+          this.wanini.place(this.level.center({ col: 10, row: 16 }, new THREE.Vector3()), this.player.position);
+          this.wanini.update(0.05, 0, { position: this.player.position, eye: this.camera.position, lightOn: true, safe: false });
+        } else if (name === 'dragontino') {
+          // 理科準備室の入口: 走ってしまい、ドラゴンチーノが目を覚ました
+          this.setState('playing');
+          this.placePlayer({ col: 17, row: 2 }, { col: 17, row: 4 }, 0.6);
+          this.player.position.x -= 0.8;
+          this.player.lookAt(this.scratch.copy(this.dragontino.position).setY(0.9));
+          this.dragontino.forceAwake();
         } else if (name === 'jumpscare') {
           // 捕まった直後(暗転前)の顔
           this.placePlayer({ col: 13, row: 11 }, { col: 16, row: 11 });
@@ -643,6 +701,7 @@ export class Game {
         position: { x: this.monster.position.x, z: this.monster.position.z },
       },
       caughtCount: this.caughtCount,
+      allies: { alarms: this.alarms, waniniAlarmed: this.wanini.alarmed > 0, dragontinoAwake: this.dragontino.awake > 0 },
       renderer: {
         calls: info.render.calls,
         triangles: info.render.triangles,

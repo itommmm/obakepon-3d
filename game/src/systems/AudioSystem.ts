@@ -359,6 +359,73 @@ export class AudioSystem {
     this.noiseBurst(panner, now, 0.06, 3200, 0.5 * level, 'bandpass');
   }
 
+  /** チョーク・ワニーニの鳴き声: 黒板をひっかくような高い軋み */
+  chalkScreech(position: THREE.Vector3): void {
+    const ctx = this.context;
+    if (!this.ready || !ctx) return;
+    const panner = this.panner(position, 6, 70);
+    const now = ctx.currentTime;
+    for (const [base, detune] of [
+      [2900, 1],
+      [3350, 1.013],
+    ]) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const wobble = ctx.createOscillator();
+      const wobbleGain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(base * detune, now);
+      osc.frequency.linearRampToValueAtTime(base * 1.25 * detune, now + 0.9);
+      wobble.frequency.value = 23;
+      wobbleGain.gain.value = 180;
+      wobble.connect(wobbleGain).connect(osc.frequency);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.09, now + 0.04);
+      gain.gain.setValueAtTime(0.09, now + 0.8);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.1);
+      osc.connect(gain).connect(panner);
+      osc.start(now);
+      osc.stop(now + 1.15);
+      wobble.start(now);
+      wobble.stop(now + 1.15);
+    }
+    this.noiseBurst(panner, now, 1.0, 5200, 0.12, 'highpass');
+  }
+
+  /** ドラゴンチーノの咆哮: 低いうなり + 息 */
+  dragonRoar(position: THREE.Vector3): void {
+    const ctx = this.context;
+    if (!this.ready || !ctx) return;
+    const panner = this.panner(position, 6, 80);
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(70, now);
+    osc.frequency.linearRampToValueAtTime(120, now + 0.4);
+    osc.frequency.exponentialRampToValueAtTime(45, now + 1.6);
+    filter.type = 'lowpass';
+    filter.frequency.value = 600;
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.5, now + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
+    osc.connect(filter).connect(gain).connect(panner);
+    osc.start(now);
+    osc.stop(now + 1.9);
+    this.noiseBurst(panner, now + 0.1, 1.5, 700, 0.5, 'bandpass');
+  }
+
+  /** ドラゴンチーノのいびき(近づくと聞こえる予告) */
+  snore(position: THREE.Vector3): void {
+    const ctx = this.context;
+    if (!this.ready || !ctx) return;
+    const panner = this.panner(position, 3, 25);
+    const now = ctx.currentTime;
+    this.noiseBurst(panner, now, 1.1, 260, 0.35, 'lowpass');
+    this.tone(55, now, 1.0, 0.04, 'sawtooth');
+  }
+
   /** ペンギーノが向きを変えたときの「キュッ」(紙パックが擦れる音 + 小さな鳴き声) */
   squeak(position: THREE.Vector3): void {
     const ctx = this.context;

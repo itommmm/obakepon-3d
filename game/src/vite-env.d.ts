@@ -23,6 +23,7 @@ interface ThreeGameDiagnostics {
     position: { x: number; z: number };
   };
   caughtCount: number;
+  allies: { alarms: number; waniniAlarmed: boolean; dragontinoAwake: boolean };
   renderer: {
     calls: number;
     triangles: number;

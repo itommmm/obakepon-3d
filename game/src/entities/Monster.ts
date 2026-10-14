@@ -64,6 +64,7 @@ export class Monster {
   private currentSpeed = 0;
   private lit = false;
   private scare = 0;
+  private rushing = false;
 
   constructor(
     private readonly level: Level,
@@ -105,6 +106,7 @@ export class Monster {
     this.waitTimer = 0;
     this.grace = graceSeconds;
     this.scare = 0;
+    this.rushing = false;
     this.currentSpeed = 0;
     this.patrolIndex = 0;
     this.model.reset();
@@ -115,6 +117,21 @@ export class Monster {
     this.stateTimer = seconds;
     this.path = [];
     this.setEyes('stunned');
+  }
+
+  /**
+   * 仲間(ワニーニ、ドラゴンチーノ)に呼ばれて、その場所へ急行する。
+   * 追跡中・怯み中・猶予中は無視。呼ばれたら true。
+   */
+  summon(position: THREE.Vector3): boolean {
+    if (this.state === 'chase' || this.state === 'alert' || this.state === 'stunned' || this.grace > 0) return false;
+    this.state = 'investigate';
+    this.rushing = true;
+    this.lastSeen.copy(position);
+    this.waitTimer = 0;
+    this.pathTo(this.level.cellOf(position.x, position.z));
+    this.setEyes('alert');
+    return true;
   }
 
   /** プレイヤーの位置を知らされて追跡を始める(電源復旧後のラストチェイス)。 */
@@ -185,9 +202,11 @@ export class Monster {
         });
         break;
       case 'investigate':
-        this.followPath(delta, PATROL_SPEED[senses.stage] * 1.2, () => {
+        // 仲間に呼ばれたときは小走りで駆けつける
+        this.followPath(delta, this.rushing ? CHASE_SPEED[senses.stage] * 0.8 : PATROL_SPEED[senses.stage] * 1.2, () => {
           this.waitTimer = 2.5;
           this.state = 'patrol';
+          this.rushing = false;
           this.path = [];
         });
         break;
@@ -272,6 +291,7 @@ export class Monster {
 
   private enterChase(): void {
     this.state = 'chase';
+    this.rushing = false;
     this.lostTimer = 0;
     this.repathTimer = 0;
     this.setEyes('chase');
@@ -288,6 +308,7 @@ export class Monster {
 
   private enterPatrol(): void {
     this.state = 'patrol';
+    this.rushing = false;
     this.path = [];
     this.waitTimer = 0.5;
     this.setEyes('patrol');
