@@ -333,7 +333,7 @@ function record(s) {
   if (prev) {
     if (s.state !== prev.state) add({ type: 'state', to: s.state });
     if (s.caught > prev.caught) {
-      add({ type: 'caught', at: [round(s.x), round(s.z)], monster: prev.monsterState, lightOn: prev.lightOn, carried: prev.carried, inserted: prev.inserted });
+      add({ type: 'caught', at: [round(s.x), round(s.z)], monsterAt: [round(prev.monsterX), round(prev.monsterZ)], monster: prev.monsterState, lightOn: prev.lightOn, carried: prev.carried, inserted: prev.inserted });
       if (!shotSeen.has('caught')) pendingShots.push('caught');
       shotSeen.add('caught');
     }
@@ -452,7 +452,7 @@ const summary = {
     powerOn: events.find((e) => e.type === 'power-on')?.t ?? null,
   },
   deaths: caughtEvents.length,
-  deathList: caughtEvents.map((e) => ({ t: e.t, at: e.at, monster: e.monster, lightOn: e.lightOn, carried: e.carried, inserted: e.inserted })),
+  deathList: caughtEvents.map((e) => ({ t: e.t, at: e.at, monsterAt: e.monsterAt, monster: e.monster, lightOn: e.lightOn, carried: e.carried, inserted: e.inserted })),
   summons: { total: summons.length, bySource },
   dragontinoWakes: events.filter((e) => e.type === 'dragontino-wake').map((e) => ({ t: e.t, playerDist: e.playerDist, lightOn: e.lightOn })),
   batteryEmptyAt,
